@@ -290,7 +290,7 @@ const OS = {
   },
   async proxyStatus() {
     if (this.cfg.proxy === false) return [false, 'Proxy off — sites load directly'];
-    try { await WebProxy.ready(); return [true, 'Proxy connected via ' + new URL(WebProxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
+    try { await WebProxy.ready(); return [true, 'HitBoy Proxy connected via ' + new URL(WebProxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
   },
   updateProxyDot() { this.proxyStatus().then(([ok]) => { const d = $('#px-dot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'bad'); }); },
 

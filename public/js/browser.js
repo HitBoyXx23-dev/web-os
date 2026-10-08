@@ -1,12 +1,13 @@
-// Proxy browser (Scramjet or Ultraviolet over Wisp via bare-mux) and the App Store catalog.
+// Proxy browser — HitBoy Proxy: Scramjet or Ultraviolet rewrite pages; the HitBoy transport carries the
+// traffic over Wisp (libcurl.js with an automatic Epoxy fallback, via bare-mux). Also the App Store catalog.
 const BASE = location.pathname.replace(/[^/]*$/, '');
 
 const WebProxy = {
   _ready: null, _sj: null,
   ENGINES: { scramjet: 'Scramjet', uv: 'Ultraviolet' },
-  TRANSPORTS: { libcurl: 'libcurl', epoxy: 'Epoxy' },
+  TRANSPORTS: { hitboy: 'Automatic', libcurl: 'libcurl only', epoxy: 'Epoxy only' },
   engine() { return this.ENGINES[OS.cfg.engine] ? OS.cfg.engine : 'scramjet'; },
-  transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'libcurl'; },
+  transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'hitboy'; },
   supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.$scramjetLoadController && self.__uv$config; },
   // Public Wisp server used when this site has no Wisp endpoint of its own (static hosts like Vercel or GitHub Pages).
   PUBLIC_WISP: 'wss://wisp.mercurywork.shop/',
@@ -42,7 +43,9 @@ const WebProxy = {
   async setTransport() {
     if (!(OS.cfg.wisp || '').trim()) this._auto = await this.probe(this.ownWisp()) ? this.ownWisp() : this.PUBLIC_WISP;
     const conn = new BareMux.BareMuxConnection(BASE + 'baremux/worker.js');
-    if (this.transport() === 'libcurl') await conn.setTransport(BASE + 'libcurl/index.mjs', [{ websocket: this.wispUrl() }]);
+    // HitBoy Proxy transport: libcurl.js first, Epoxy automatically for sites that fail there (hitboy/transport.mjs).
+    if (this.transport() === 'hitboy') await conn.setTransport(BASE + 'hitboy/transport.mjs', [{ wisp: this.wispUrl() }]);
+    else if (this.transport() === 'libcurl') await conn.setTransport(BASE + 'libcurl/index.mjs', [{ websocket: this.wispUrl() }]);
     else await conn.setTransport(BASE + 'epoxy/index.mjs', [{ wisp: this.wispUrl() }]);
   },
   encode(url) { return this.engine() === 'uv' ? __uv$config.prefix + __uv$config.encodeUrl(url) : this._sj.encodeUrl(url); },
