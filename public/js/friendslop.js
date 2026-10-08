@@ -10,6 +10,9 @@ const SS_EMOTES = { 1: '👋', 2: '🕺', 3: '😱', 4: '👍' };
 // Each shift takes place in a different kind of facility.
 const SS_THEMES = [{ name: 'Factory', a: '#2a2b31', b: '#26272c', wall: '#3a3b43' }, { name: 'Old Mansion', a: '#3a2a22', b: '#33251e', wall: '#5a3e2b' },
   { name: 'Ice Lab', a: '#22303a', b: '#1e2a33', wall: '#3c5566' }, { name: 'Swamp Works', a: '#24301f', b: '#202a1b', wall: '#3d4a2e' }];
+// Ship shop between shifts: team upgrades that last until you get fired. [id, name, description, price]
+const SS_SHOP = [['light', 'Bright Flashlight', 'Longer, wider beam — Statues freeze from farther away', 60], ['bag', 'Big Backpack', 'Carry 6 items instead of 4', 80],
+  ['shoes', 'Running Shoes', '15% faster, stamina refills quicker', 70], ['time', 'Overtime', '+40 seconds every shift', 90], ['tele', 'Teleporter', 'Dead crewmates beam back to the ship once per shift (after 20 s)', 120]];
 const ssTheme = lv => SS_THEMES[(lv - 1) % SS_THEMES.length];
 
 function ssRng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -52,7 +55,7 @@ function ssSees(map, a, b, max = 1e9) { // line of sight between two points
   const n = Math.ceil(d / 12); for (let i = 1; i < n; i++) if (ssWall(map, a.x + (b.x - a.x) * i / n, a.y + (b.y - a.y) * i / n)) return false; return true;
 }
 const inShip = (map, p) => { const s = map.ship, T = SS.T; return p.x > s.x * T && p.x < (s.x + s.w) * T && p.y > s.y * T && p.y < (s.y + s.h) * T; };
-const lit = (p, q, map) => p.fl && !p.dead && Math.hypot(q.x - p.x, q.y - p.y) < 270 && Math.abs(((Math.atan2(q.y - p.y, q.x - p.x) - p.a + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < .5 && ssSees(map, p, q);
+const lit = (p, q, map, range = 270, cone = .5) => p.fl && !p.dead && Math.hypot(q.x - p.x, q.y - p.y) < range && Math.abs(((Math.atan2(q.y - p.y, q.x - p.x) - p.a + Math.PI * 3) % (Math.PI * 2)) - Math.PI) < cone && ssSees(map, p, q);
 
 GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono: 'SS', bg: '#c2410c' }, cat: 'Games', desc: 'Co-op scavenging with friends', w: 1040, h: 700, run(body, win) {
   body.style.overflow = 'hidden'; body.tabIndex = 0;
@@ -73,17 +76,18 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   // ---- networking ----
   const send = m => conn?.send(m);
   const toHost = m => { if (isHost()) hostMsg({ ...m, from: myId }); else send({ ...m, to: hostId }); };
+  let run = { up: {}, cr: 0 }; // host: upgrades and shop money for this run
   const newShift = (lv, q, keepSeed) => {
     const seed = keepSeed || (Math.random() * 1e9 | 0), map = ssMap(seed, lv);
-    W = { seed, lv, q, b: 0, tl: 150 + lv * 20, ph: 'play', map, msg: null, msgAt: 0, stats: {} };
+    W = { seed, lv, q, b: 0, tl: 150 + lv * 20 + (run.up.time ? 40 : 0), ph: 'play', map, msg: null, msgAt: 0, stats: {}, up: run.up, cr: run.cr };
     spawn();
   };
-  const spawn = () => { const s = W.map.ship, i = myId % 6; me.x = (s.x + 1.5 + i % 3) * SS.T; me.y = (s.y + 1.5 + (i / 3 | 0)) * SS.T; me.dead = false; me.stam = 1; };
-  const snapshot = () => ({ t: 'w', seed: W.seed, lv: W.lv, q: W.q, b: W.b, tl: Math.round(W.tl), ph: W.ph, msg: W.msg, bd: W.ph === 'end' ? W.board : undefined,
+  const spawn = () => { const s = W.map.ship, i = myId % 6; me.x = (s.x + 1.5 + i % 3) * SS.T; me.y = (s.y + 1.5 + (i / 3 | 0)) * SS.T; me.dead = false; me.stam = 1; me.revived = false; me.deadFor = 0; };
+  const snapshot = () => ({ t: 'w', seed: W.seed, lv: W.lv, q: W.q, b: W.b, tl: Math.round(W.tl), ph: W.ph, msg: W.msg, bd: W.ph === 'end' ? W.board : undefined, up: Object.keys(W.up || {}), cr: W.cr,
     m: W.map.monsters.map(m => [Math.round(m.x), Math.round(m.y), m.kind, m.st, +m.a.toFixed(2)]), s: W.map.scrap.map(s => [s.own, Math.round(s.x), Math.round(s.y)]) });
   const applySnap = m => {
     if (!W || W.seed !== m.seed) { const fresh = !W || W.lv !== m.lv || W.ph !== m.ph; W = { seed: m.seed, lv: m.lv, map: ssMap(m.seed, m.lv) }; if (fresh) spawn(); }
-    Object.assign(W, { q: m.q, b: m.b, tl: m.tl, ph: m.ph, msg: m.msg, board: m.bd });
+    Object.assign(W, { q: m.q, b: m.b, tl: m.tl, ph: m.ph, msg: m.msg, board: m.bd, up: Object.fromEntries((m.up || []).map(k => [k, 1])), cr: m.cr });
     m.m.forEach((v, i) => { const o = W.map.monsters[i]; if (o) { o.x = v[0]; o.y = v[1]; o.st = v[3]; o.a = v[4]; } });
     m.s.forEach((v, i) => { const o = W.map.scrap[i]; if (o) { o.own = v[0]; o.x = v[1]; o.y = v[2]; } });
   };
@@ -92,16 +96,22 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     if (m.t === 'p') { const p = peers.get(m.from); if (p) Object.assign(p, { tx: m.x, ty: m.y, x: p.x ?? m.x, y: p.y ?? m.y, a: m.a, fl: m.fl, dead: m.dead, e: m.e, eAt: m.e && m.e !== p.e ? Date.now() : p.eAt, color: m.c, name: m.n, swingAt: m.sw ? Date.now() : p.swingAt }); return; }
     if (m.t === 'w') { if (!isHost()) applySnap(m); return; }
     if (m.t === 'say') { const p = peers.get(m.from); if (p && (me.dead || Math.hypot(p.x - me.x, p.y - me.y) < 420)) { p.say = m.text; p.sayAt = Date.now(); say(`${p.name}: ${m.text}`); beep(660, .05, 'sine', .03); } return; }
-    if (m.t === 'kill') { if (m.id === myId) { me.dead = true; beep(90, .6, 'sawtooth', .08); say('You died. Watch your friends until the shift ends.'); } else { const p = peers.get(m.id); if (p) say(`${p.name} was caught!`); } return; }
+    if (m.t === 'kill') { if (m.id === myId) { me.dead = true; me.deadFor = 0; beep(90, .6, 'sawtooth', .08); say('You died. Watch your friends until the shift ends.'); } else { const p = peers.get(m.id); if (p) say(`${p.name} was caught!`); } return; }
     if (m.t === 'scream') { const p = peers.get(m.from); if (p && Math.hypot(p.x - me.x, p.y - me.y) < 600) beep(880, .25, 'sawtooth', .04); }
     if (m.t === 'shove') { if (m.id === myId) { me.push = { a: m.a, t: .22 }; beep(200, .1, 'square', .04); } return; }
     if (isHost()) hostMsg(m);
   };
   // requests only the host acts on
   const hostMsg = m => {
+    if (W?.ph === 'shop') {
+      const item = SS_SHOP.find(x => x[0] === m.item);
+      if (m.t === 'buy' && item && !run.up[item[0]] && run.cr >= item[3]) { run.cr -= item[3]; run.up[item[0]] = 1; W.up = run.up; W.cr = run.cr; toAllSay(`${(m.from === myId ? me : peers.get(m.from))?.name || 'Someone'} bought ${item[1]}!`); }
+      if (m.t === 'shopdone' && m.from === myId) W.tl = 0;
+      return;
+    }
     if (!W || W.ph !== 'play') return;
     const p = m.from === myId ? me : peers.get(m.from); if (!p || p.dead) return;
-    if (m.t === 'pick') { const s = W.map.scrap[m.sid]; if (s && !s.own && Math.hypot(s.x - p.x, s.y - p.y) < 90 && W.map.scrap.filter(x => x.own === m.from).length < 4) s.own = m.from; }
+    if (m.t === 'pick') { const s = W.map.scrap[m.sid]; if (s && !s.own && Math.hypot(s.x - p.x, s.y - p.y) < 90 && W.map.scrap.filter(x => x.own === m.from).length < (W.up?.bag ? 6 : 4)) s.own = m.from; }
     if (m.t === 'drop') W.map.scrap.filter(s => s.own === m.from).forEach((s, i) => { s.own = 0; s.x = p.x + (i % 2) * 14 - 7; s.y = p.y + (i >> 1) * 14; });
     if (m.t === 'bank' && inShip(W.map, p)) W.map.scrap.filter(s => s.own === m.from).forEach(s => { s.own = -1; W.b += s.v; stat(m.from).v += s.v; });
     if (m.t === 'hit') { // shovel: stuns lurkers and hoarders in front of you (statues don't care), shoves friends
@@ -121,13 +131,18 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   const endShift = () => {
     players().forEach(p => stat(p.id));
     W.board = Object.values(W.stats).sort((a, b) => b.v - a.v).map(x => [x.name, x.color, x.v, x.deaths, x.hits]);
-    const ok = W.b >= W.q; W.ph = 'end'; W.msg = ok ? `Quota met! $${W.b} / $${W.q} — next shift starting…` : `FIRED. You brought back $${W.b} of $${W.q}. Starting over…`;
-    setTimeout(() => { if (!running || !isHost()) return; ok ? newShift(W.lv + 1, Math.round(W.q * 1.45 + 60)) : newShift(1, 150); }, 8000);
+    const ok = W.b >= W.q; W.ph = 'end'; W.msg = ok ? `Quota met! $${W.b} / $${W.q} — off to the ship shop…` : `FIRED. You brought back $${W.b} of $${W.q}. Starting over…`;
+    setTimeout(() => {
+      if (!running || !isHost()) return;
+      if (!ok) { run = { up: {}, cr: 0 }; return newShift(1, 150); }
+      run.cr += W.b - W.q + 40; Object.assign(W, { ph: 'shop', tl: 25, msg: null, nq: Math.round(W.q * 1.45 + 60), cr: run.cr, up: run.up });
+    }, 7000);
   };
 
   // ---- host simulation ----
   let flow = null, flowAt = 0;
   const hostTick = dt => {
+    if (W?.ph === 'shop') { if ((W.tl -= dt) <= 0) newShift(W.lv + 1, W.nq); return; }
     if (!W || W.ph !== 'play') return;
     W.tl -= dt;
     const alive = players().filter(p => !p.dead && p.x !== undefined);
@@ -139,7 +154,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       if (m.stun > 0) { m.stun -= dt; m.st = 'stunned'; continue; }
       if (m.kind === 'hoarder') { hoarderTick(m, mi, hoard, alive, dt); continue; }
       const seen = alive.filter(p => ssSees(map, m, p, m.kind === 'statue' ? 620 : 300)).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
-      const watched = m.kind === 'statue' && alive.some(p => lit(p, m, map));
+      const watched = m.kind === 'statue' && alive.some(p => lit(p, m, map, W.up?.light ? 400 : 270, W.up?.light ? .7 : .5));
       let speed = 60, tx = m.tx, ty = m.ty;
       if (m.kind === 'statue' && watched) { m.st = 'frozen'; continue; }
       if (seen) { m.st = 'chase'; tx = seen.x; ty = seen.y; speed = m.kind === 'statue' ? 210 : 128; }
@@ -227,8 +242,8 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       let mx = (keys.has('d') || keys.has('arrowright')) - (keys.has('a') || keys.has('arrowleft')), my = (keys.has('s') || keys.has('arrowdown')) - (keys.has('w') || keys.has('arrowup'));
       const carry = W.map.scrap.filter(s => s.own === myId), wt = carry.reduce((n, s) => n + s.wt, 0);
       const sprint = keys.has('shift') && me.stam > .05 && (mx || my);
-      me.stam = Math.max(0, Math.min(1, me.stam + (sprint ? -.35 : .18) * dt));
-      const sp = (sprint ? 215 : 135) * Math.max(.5, 1 - wt * .05);
+      me.stam = Math.max(0, Math.min(1, me.stam + (sprint ? -.35 : W.up?.shoes ? .26 : .18) * dt));
+      const sp = (sprint ? 215 : 135) * Math.max(.5, 1 - wt * .05) * (W.up?.shoes ? 1.15 : 1);
       if (mx || my) { const l = Math.hypot(mx, my); ssMove(W.map, me, mx / l * sp * dt, my / l * sp * dt); if (!mouse) me.a = Math.atan2(my, mx); }
       if (mouse) me.a = Math.atan2(mouse[1] - cv.clientHeight / 2, mouse[0] - cv.clientWidth / 2);
       if (carry.length && inShip(W.map, me) && now - (me.bankAt || 0) > 400) { me.bankAt = now; toHost({ t: 'bank' }); beep(1320, .1, 'triangle'); }
@@ -237,6 +252,8 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       const threat = W.map.monsters.filter(m => (m.st === 'chase' || m.st === 'angry') && !m.stun).map(m => Math.hypot(m.x - me.x, m.y - me.y)).sort((a, b) => a - b)[0];
       if (threat < 340 && now - (me.beatAt || 0) > 350 + threat * 2) { me.beatAt = now; beep(55, .12, 'sine', .12); setTimeout(() => beep(48, .1, 'sine', .09), 140); }
     }
+    if (W && W.ph === 'play' && me.dead && W.up?.tele && !me.revived && (me.deadFor += dt) > 20) { const s = W.map.ship; me.x = (s.x + 2) * SS.T; me.y = (s.y + 2) * SS.T; me.dead = false; me.revived = true; beep(660, .4, 'triangle', .06, 600); say('The teleporter beamed you back to the ship!'); }
+    if (W?.ph === 'shop') shopUI(); else if (ui.querySelector('.ss-shop')) ui.innerHTML = '';
     for (const p of peers.values()) if (p.tx !== undefined) { p.x += (p.tx - p.x) * Math.min(1, dt * 12); p.y += (p.ty - p.y) * Math.min(1, dt * 12); }
     if (isHost()) { hostTick(dt); if (W && now - worldAt > 100) { worldAt = now; send(snapshot()); } }
     if (W && now - sendAt > 66) { sendAt = now; send({ t: 'p', x: Math.round(me.x), y: Math.round(me.y), a: +me.a.toFixed(2), fl: me.fl, dead: me.dead, e: me.e, c: me.color, n: me.name, sw: now - (me.swingAt || 0) < 200 ? 1 : 0 }); }
@@ -284,7 +301,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       if (p.x === undefined || p.dead) continue;
       const px = p.x + ox, py = p.y + oy;
       let g = dx.createRadialGradient(px, py, 0, px, py, 70); g.addColorStop(0, 'rgba(0,0,0,.9)'); g.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = g; dx.beginPath(); dx.arc(px, py, 70, 0, 7); dx.fill();
-      if (p.fl) { g = dx.createRadialGradient(px, py, 10, px, py, 290); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.7, 'rgba(0,0,0,.8)'); g.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = g; dx.beginPath(); dx.moveTo(px, py); dx.arc(px, py, 290, p.a - .5, p.a + .5); dx.closePath(); dx.fill(); }
+      if (p.fl) { const R = W.up?.light ? 420 : 290, C = W.up?.light ? .7 : .5; g = dx.createRadialGradient(px, py, 10, px, py, R); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.7, 'rgba(0,0,0,.8)'); g.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = g; dx.beginPath(); dx.moveTo(px, py); dx.arc(px, py, R, p.a - C, p.a + C); dx.closePath(); dx.fill(); }
     }
     cx.setTransform(1, 0, 0, 1, 0, 0); cx.drawImage(dark, 0, 0); cx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // labels on top of the dark
@@ -345,6 +362,15 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     }
   };
 
+  // ---- ship shop ----
+  const toAllSay = text => { send({ t: 'say', text }); say(text); };
+  const shopUI = () => {
+    if (!ui.querySelector('.ss-shop')) ui.innerHTML = `<div class="ss-lobby ss-shop"><h2>Ship shop</h2><p class="muted">Quota met! Spend the team's bonus — upgrades last until you get fired.</p>
+      <p><b class="ss-cr"></b> · next shift in <b class="ss-tl"></b>s</p><div class="ss-items">${SS_SHOP.map(([k, n, d, c]) => `<button data-buy="${k}"><b>${n}</b><small>${d}</small><span>$${c}</span></button>`).join('')}</div>
+      ${isHost() ? '<button class="primary" data-a="nextshift">Start the next shift</button>' : '<p class="muted small">Anyone can buy. The host starts the next shift.</p>'}</div>`;
+    ui.querySelector('.ss-cr').textContent = `Team money: $${W.cr || 0}`; ui.querySelector('.ss-tl').textContent = Math.max(0, Math.ceil(W.tl));
+    ui.querySelectorAll('[data-buy]').forEach(b => { const it = SS_SHOP.find(x => x[0] === b.dataset.buy), own = W.up?.[it[0]]; b.classList.toggle('owned', !!own); b.disabled = own || (W.cr || 0) < it[3]; b.querySelector('span').textContent = own ? 'Owned' : `$${it[3]}`; });
+  };
   // ---- lobby ----
   const lobby = (note = '') => {
     ui.innerHTML = `<div class="ss-lobby"><h2>Scrap Shift</h2><p class="muted">Grab scrap, bring it back to the ship, meet the quota. Stay in the light — and stay together.</p>
@@ -385,6 +411,8 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     });
   };
   ui.onclick = e => {
+    const buy = e.target.closest('[data-buy]'); if (buy) return toHost({ t: 'buy', item: buy.dataset.buy });
+    if (e.target.closest('[data-a=nextshift]')) return toHost({ t: 'shopdone' });
     const c = e.target.closest('[data-color]'); if (c) { me.color = SS_COLORS[+c.dataset.color]; localStorage.setItem('novaos.ssColor', c.dataset.color); ui.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('on', b === c)); return; }
     const rm = e.target.closest('[data-room]'); if (rm) return connect(rm.dataset.room.replace(/^ss-/, ''));
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;

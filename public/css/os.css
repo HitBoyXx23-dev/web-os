@@ -796,3 +796,13 @@ select option { background: var(--surface-2); color: var(--text); }
 .li-dialog { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); width: min(560px, 90%); background: rgba(15, 23, 42, .92); border: 1px solid rgba(255, 255, 255, .15); border-radius: 12px; padding: 14px 18px; text-shadow: none; }
 .li-dialog p { margin: 6px 0; font-weight: 400; line-height: 1.5; }
 .li-dialog small { opacity: .6; font-weight: 400; }
+.iso-note { margin: 4px 0 0; line-height: 1.45; }
+.iso-note.warn { color: #f59e0b; }
+.ss-shop { width: min(620px, 94%); }
+.ss-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+.ss-items button { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; border-radius: 10px; text-align: left; height: auto; background: rgba(255, 255, 255, .06); border: 1px solid rgba(255, 255, 255, .12); color: #fff; white-space: normal; }
+.ss-items button small { color: rgba(255, 255, 255, .65); font-size: 12px; line-height: 1.35; }
+.ss-items button span { color: #facc15; font-weight: 600; }
+.ss-items button.owned { border-color: #22c55e; background: rgba(34, 197, 94, .15); }
+.ss-items button.owned span { color: #4ade80; }
+.ss-items button:disabled:not(.owned) { opacity: .5; }

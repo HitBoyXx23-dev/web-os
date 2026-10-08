@@ -221,13 +221,14 @@ APPS.vm = ALL_APPS.vm = { name: 'VMBox', icon: realIcon('virtualbox'), cat: 'Sys
         <p class="muted small">${esc(t.desc || '')}</p>
         ${t.external ? '' : `
         <label class="field">Base Memory <span class="muted">${t.fixedMemory ? `(fixed at ${t.memory} MB by its snapshot)` : ''}</span>
-          <div class="row"><input type="range" name="memory" min="16" max="1024" step="16" value="${edit?.memory || t.memory}" ${t.fixedMemory ? 'disabled' : ''} class="grow"><b class="mem-v">${edit?.memory || t.memory} MB</b></div></label>
+          <div class="row"><input type="range" name="memory" min="16" max="2048" step="16" value="${edit?.memory || t.memory}" ${t.fixedMemory ? 'disabled' : ''} class="grow"><b class="mem-v">${edit?.memory || t.memory} MB</b></div></label>
         <label class="row small"><input type="checkbox" name="network" ${edit?.network === false ? '' : 'checked'} ${t.net === 'none' ? 'disabled' : ''}> Enable network (NAT through the proxy server)</label>`}
         ${tid === 'custom' ? `<div class="field">Boot image
           <div class="seg"><button type="button" data-k="file" class="${src.kind !== 'url' ? 'on' : ''}">From Files</button><button type="button" data-k="url" class="${src.kind === 'url' ? 'on' : ''}">From URL</button></div>
           <div class="row k-file ${src.kind === 'url' ? 'hidden' : ''}"><input name="path" class="grow" placeholder="/VMs/my.iso" value="${esc(src.path || '')}"><button type="button" data-a="pick">Choose…</button><button type="button" data-a="upload">Upload…</button><input type="file" hidden accept=".iso,.img,.ima,.flp,.vfd,.bin"></div>
           <input name="url" class="k-url ${src.kind === 'url' ? '' : 'hidden'}" placeholder="https://…/image.iso (must allow cross-site downloads)" value="${esc(src.url || '')}">
-          <select name="type"><option value="cdrom" ${src.type === 'cdrom' ? 'selected' : ''}>CD/DVD (ISO)</option><option value="hda" ${src.type === 'hda' ? 'selected' : ''}>Hard disk image</option><option value="fda" ${src.type === 'fda' ? 'selected' : ''}>Floppy image</option></select></div>` : ''}
+          <select name="type"><option value="cdrom" ${src.type === 'cdrom' ? 'selected' : ''}>CD/DVD (ISO)</option><option value="hda" ${src.type === 'hda' ? 'selected' : ''}>Hard disk image</option><option value="fda" ${src.type === 'fda' ? 'selected' : ''}>Floppy image</option></select></div>
+          <p class="iso-note small muted">VMBox runs 32-bit x86 systems: Windows 9x/2000/XP-era, 32-bit Linux (i386/i686), DOS, BSD, ReactOS, Haiku and more. 64-bit-only ISOs won't boot.</p>` : ''}
         <div class="row" style="justify-content:flex-end"><button type="button" class="ghost" data-a="cancel">Cancel</button><button class="primary">${edit ? 'Save' : t.external ? 'Add' : 'Create'}</button></div></form>`;
       const f = m.querySelector('form');
       f.tpl.onchange = () => { tid = f.tpl.value; render(); };
@@ -235,13 +236,20 @@ APPS.vm = ALL_APPS.vm = { name: 'VMBox', icon: realIcon('virtualbox'), cat: 'Sys
       m.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { m.querySelectorAll('[data-k]').forEach(x => x.classList.toggle('on', x === b)); m.querySelector('.k-file').classList.toggle('hidden', b.dataset.k !== 'file'); m.querySelector('.k-url').classList.toggle('hidden', b.dataset.k !== 'url'); });
       const fileIn = m.querySelector('input[type=file]');
       const guessType = n => /\.iso$/i.test(n) ? 'cdrom' : /\.(ima|flp|vfd)$/i.test(n) ? 'fda' : 'hda';
-      m.querySelector('[data-a=pick]')?.addEventListener('click', async () => { const p = await FilePicker(win, { mode: 'open', start: FS.isDir('/VMs') ? '/VMs' : '/' }); if (p) { f.path.value = p; f.type.value = guessType(p); } });
+      // VMBox emulates a 32-bit PC: warn early when an image looks 64-bit only.
+      const checkImage = p => {
+        const note = m.querySelector('.iso-note'); if (!note) return;
+        const r = imageArch(FS.bytes(p), p); note.className = 'iso-note small ' + (r.arch === '64' ? 'warn' : 'muted');
+        note.textContent = r.arch === '64' ? `This looks like a 64-bit (x86-64) system${r.label ? ` (“${r.label}”)` : ''}. VMBox emulates a 32-bit PC, so it probably won't boot. Look for a 32-bit download (i386 / i686 / x86), or try a template.`
+          : r.arch === '32' ? `Looks like a 32-bit system${r.label ? ` (“${r.label}”)` : ''} — good. Give it enough memory (most need 256–1024 MB).` : '';
+      };
+      m.querySelector('[data-a=pick]')?.addEventListener('click', async () => { const p = await FilePicker(win, { mode: 'open', start: FS.isDir('/VMs') ? '/VMs' : '/' }); if (p) { f.path.value = p; f.type.value = guessType(p); checkImage(p); } });
       m.querySelector('[data-a=upload]')?.addEventListener('click', () => fileIn.click());
       if (fileIn) fileIn.onchange = async () => {
         const file = fileIn.files[0]; if (!file) return;
         if (file.size > 700 * MB) return OS.toast('That image is too large to store in the browser (700 MB max).');
         const p = FS.freeName('/VMs', file.name); OS.toast(`Copying ${file.name} into Files…`);
-        FS.writeBytes(p, new Uint8Array(await file.arrayBuffer())); f.path.value = p; f.type.value = guessType(file.name);
+        FS.writeBytes(p, new Uint8Array(await file.arrayBuffer())); f.path.value = p; f.type.value = guessType(file.name); checkImage(p);
       };
       f.onsubmit = e => {
         e.preventDefault();
@@ -270,3 +278,14 @@ APPS.vm = ALL_APPS.vm = { name: 'VMBox', icon: realIcon('virtualbox'), cat: 'Sys
   }
   draw();
 } };
+
+// Guess an image's CPU architecture from its ISO 9660 volume label and well-known file and folder names.
+function imageArch(bytes, name = '') {
+  if (!bytes) return { arch: null };
+  const label = bytes.length > 32808 && String.fromCharCode(...bytes.subarray(32769, 32774)) === 'CD001' ? String.fromCharCode(...bytes.subarray(32808, 32840)).trim() : '';
+  const sample = new TextDecoder('latin1').decode(bytes.subarray(0, Math.min(bytes.length, 24 * 1048576)));
+  const hay = (name + ' ' + label + ' ' + sample).toLowerCase();
+  const is64 = /x86_64|amd64|bootx64\.efi|\bx64\b|win64/.test(hay), is32 = /\bi[3-6]86\b|bootia32\.efi|\bx86\b(?!_64)|win32|32-?bit/.test(name.toLowerCase() + ' ' + label.toLowerCase()) || /\/i386\/|\bi686\b/.test(hay);
+  return { arch: is64 && !is32 ? '64' : is32 ? '32' : null, label };
+}
+
