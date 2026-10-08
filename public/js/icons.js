@@ -51,11 +51,25 @@ const TILE = {
   media: '#ef4444', paint: '#f97316', calc: '#52525b', settings: '#6b7280', about: '#3b82f6', taskmgr: '#10b981',
   snake: '#16a34a', g2048: '#d97706', mines: '#475569', ttt: '#0891b2', breakout: '#db2777', flappy: '#eab308', web: '#6366f1',
 };
-// icon: a glyph key, or { mono: 'YT', bg: '#c00' } for monogram tiles.
+// Real app icons (Papirus icon theme, vendored in /icons).
+const realIcon = name => ({ img: 'icons/' + name + '.svg' });
+// icon: realIcon('name') for a real icon, a glyph key, or { mono: 'YT', bg: '#c00' } for monogram tiles.
 function tile(icon, size = 40) {
+  if (icon && icon.img) return `<img class="tile-img" src="${esc(icon.img)}" width="${size}" height="${size}" alt="" draggable="false" loading="lazy">`;
   const r = Math.round(size * .26);
   if (icon && typeof icon === 'object') {
     return `<span class="tile" style="width:${size}px;height:${size}px;border-radius:${r}px;--t:${icon.bg};font-size:${Math.round(size * (icon.mono.length > 2 ? .3 : .38))}px">${esc(icon.mono)}</span>`;
   }
   return `<span class="tile" style="width:${size}px;height:${size}px;border-radius:${r}px;--t:${TILE[icon] || TILE.web}">${glyph(icon, Math.round(size * .56))}</span>`;
 }
+
+// Load a third-party script (and optional stylesheet) once, on first use.
+const loadOnce = (() => {
+  const seen = {};
+  return (src, css) => seen[src] ||= new Promise((resolve, reject) => {
+    if (css) { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = css; document.head.appendChild(l); }
+    const s = document.createElement('script'); s.src = src;
+    s.onload = resolve; s.onerror = () => { delete seen[src]; reject(new Error('Could not load ' + src.split('/').pop() + '. Check your connection.')); };
+    document.head.appendChild(s);
+  });
+})();

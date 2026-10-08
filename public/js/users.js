@@ -34,6 +34,7 @@ const Boot = {
   ENTRIES: [
     { label: 'NovaOS', run: () => Boot.splash() },
     { label: 'NovaOS (safe graphics)', run: () => { OS.set({ theme: 'dark' }); Boot.splash(); } },
+    { label: 'NovaOS Linux terminal', run: () => { OS.afterLogin = () => OS.launch('linux'); Boot.splash(); } },
     { label: 'Virtual PC: Windows 98', run: () => { OS.afterLogin = () => APPS.vm.boot('windows98'); Boot.splash(); } },
     { label: 'Virtual PC: Windows 2000', run: () => { OS.afterLogin = () => APPS.vm.boot('windows2000'); Boot.splash(); } },
     { label: 'UEFI Firmware Settings', run: () => { OS.afterLogin = () => OS.launch('settings', 'system'); Boot.splash(); } },

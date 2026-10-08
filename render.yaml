@@ -1,0 +1,9 @@
+# One-click deploy on Render (https://render.com/deploy). Runs the OS plus its own Wisp server,
+# which is the fastest and most reliable setup for the proxy browser (YouTube, Discord…).
+services:
+  - type: web
+    name: novaos
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start

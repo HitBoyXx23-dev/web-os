@@ -166,7 +166,7 @@ const GAMES = {
 // Web games embedded by URL (open-source projects hosted on GitHub Pages).
 const WEB_GAMES = [
   { name: 'Hextris', mono: 'Hx', bg: '#e11d48', url: 'https://hextris.github.io/hextris/' },
-  { name: 'Tetris', mono: 'Te', bg: '#0891b2', url: 'https://chvin.github.io/react-tetris/?lan=en' },
+  { name: 'Tetris', img: 'kblocks', mono: 'Te', bg: '#0891b2', url: 'https://chvin.github.io/react-tetris/?lan=en' },
   { name: 'Clumsy Bird', mono: 'CB', bg: '#65a30d', url: 'https://ellisonleao.github.io/clumsy-bird/' },
-  { name: 'Pac-Man', mono: 'PM', bg: '#ca8a04', url: 'https://masonicgit.github.io/pacman/' },
+  { name: 'Pac-Man', img: 'pacman', mono: 'PM', bg: '#ca8a04', url: 'https://masonicgit.github.io/pacman/' },
 ];

@@ -4,28 +4,72 @@ const card = (icon, name, sub, attrs = '', extra = '') => `<div class="card" ${a
 
 // Operating systems the Virtual PC can boot, via the open-source v86 x86 emulator (copy.sh/v86).
 const VM_PROFILES = [
-  { id: 'windows98', name: 'Windows 98', mono: '98', bg: '#0f766e', note: 'Second Edition · 1998' },
-  { id: 'windows95', name: 'Windows 95', mono: '95', bg: '#0e7490', note: 'The first Start menu · 1995' },
+  { id: 'windows98', name: 'Windows 98', img: 'windows95', mono: '98', bg: '#0f766e', note: 'Second Edition · 1998' },
+  { id: 'windows95', name: 'Windows 95', img: 'windows95', mono: '95', bg: '#0e7490', note: 'The first Start menu · 1995' },
   { id: 'windowsme', name: 'Windows ME', mono: 'ME', bg: '#1d4ed8', note: 'Millennium Edition · 2000' },
   { id: 'windows2000', name: 'Windows 2000', mono: '2K', bg: '#4338ca', note: 'NT 5.0 · slower to boot' },
   { id: 'windows30', name: 'Windows 3.0', mono: '3.0', bg: '#475569', note: 'Program Manager · 1990' },
   { id: 'windows1', name: 'Windows 1.01', mono: '1.0', bg: '#334155', note: 'The original · 1985' },
   { id: 'reactos', name: 'ReactOS', mono: 'Ro', bg: '#2563eb', note: 'Open-source Windows clone' },
-  { id: 'freedos', name: 'FreeDOS', mono: 'DOS', bg: '#27272a', note: 'Command line' },
-  { id: 'linux26', name: 'Linux', mono: 'Lx', bg: '#ca8a04', note: 'Minimal 2.6 kernel' },
+  { id: 'freedos', name: 'FreeDOS', img: 'dosbox', mono: 'DOS', bg: '#27272a', note: 'Command line' },
+  { id: 'linux26', name: 'Linux', img: 'tux', mono: 'Lx', bg: '#ca8a04', note: 'Minimal 2.6 kernel' },
   { id: 'kolibrios', name: 'KolibriOS', mono: 'K', bg: '#16a34a', note: 'Tiny assembly GUI OS' },
 ];
 
+const CM = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/';
+// ext → [label, CodeMirror mode]
+const EDITOR_MODES = { js: ['JavaScript', 'javascript'], mjs: ['JavaScript', 'javascript'], json: ['JSON', { name: 'javascript', json: true }], ts: ['TypeScript', 'text/typescript'],
+  html: ['HTML', 'htmlmixed'], htm: ['HTML', 'htmlmixed'], css: ['CSS', 'css'], xml: ['XML', 'xml'], svg: ['SVG', 'xml'], md: ['Markdown', 'markdown'],
+  py: ['Python', 'python'], sh: ['Shell', 'shell'], txt: ['Plain Text', null] };
+const loadCodeMirror = async () => {
+  await loadOnce(CM + 'codemirror.min.js', CM + 'codemirror.min.css');
+  if (!document.querySelector('link[data-cm-theme]')) document.head.insertAdjacentHTML('beforeend', `<link rel="stylesheet" data-cm-theme href="${CM}theme/material-darker.min.css">`);
+  for (const m of ['xml', 'javascript', 'css', 'htmlmixed', 'markdown', 'python', 'shell']) await loadOnce(`${CM}mode/${m}/${m}.min.js`);
+};
+
+// In-window Open/Save dialog. Resolves to a path, or null if cancelled.
+function FilePicker(win, { mode = 'open', start = '/', name = '' } = {}) {
+  return new Promise(resolve => {
+    let cwd = FS.isDir(start) ? start : '/';
+    const m = document.createElement('div'); m.className = 'modal';
+    const close = v => { m.remove(); resolve(v); };
+    const draw = () => {
+      m.innerHTML = `<div class="modal-card"><div class="row" style="justify-content:space-between"><h3>${mode === 'open' ? 'Open File' : 'Save As'}</h3><span class="crumbs">${esc(cwd === '/' ? 'Home' : 'Home' + cwd.split('/').join(' / '))}</span></div>
+        <ul class="list pick">${cwd !== '/' ? `<li data-go="${esc(FS.parent(cwd))}">${glyph('up', 16)}<span>..</span></li>` : ''}${FS.list(cwd).map(f => `<li class="${f.type}" ${f.type === 'dir' ? `data-go="${esc(f.path)}"` : `data-file="${esc(f.path)}"`}>${glyph(f.type === 'dir' ? 'folder' : 'file', 16)}<span>${esc(f.name)}</span></li>`).join('')}</ul>
+        ${mode === 'save' ? `<input class="pick-name" value="${esc(name)}" placeholder="File name">` : ''}
+        <div class="row" style="justify-content:flex-end"><button class="ghost pick-cancel">Cancel</button><button class="primary pick-ok">${mode === 'open' ? 'Open' : 'Save'}</button></div></div>`;
+      const inp = m.querySelector('.pick-name'); if (inp) { inp.focus(); inp.setSelectionRange(0, inp.value.replace(/\.[^.]*$/, '').length); inp.oninput = () => name = inp.value; inp.onkeydown = e => e.key === 'Enter' && m.querySelector('.pick-ok').click(); }
+    };
+    m.onclick = e => {
+      const go = e.target.closest('[data-go]'), f = e.target.closest('[data-file]');
+      if (go) { cwd = go.dataset.go; return draw(); }
+      if (f) { if (mode === 'open') return close(f.dataset.file); name = FS.base(f.dataset.file); return draw(); }
+      if (e.target.closest('.pick-cancel') || e.target === m) return close(null);
+      if (e.target.closest('.pick-ok')) {
+        if (mode === 'open') { const s = m.querySelector('li.sel'); return s ? close(s.dataset.file) : null; }
+        const n = (m.querySelector('.pick-name').value || '').trim(); if (!n || n.includes('/')) return;
+        const p = FS.join(cwd, n); if (FS.exists(p) && !confirm(`Replace “${n}”?`)) return; close(p);
+      }
+    };
+    m.onkeydown = e => { if (e.key === 'Escape') { e.stopPropagation(); close(null); } };
+    draw(); win.body.appendChild(m);
+  });
+}
+
+const vmIcon = p => p.img ? realIcon(p.img) : { mono: p.mono, bg: p.bg };
+
 const APPS = {
-  games: { name: 'Games', icon: 'games', cat: 'System', w: 760, h: 560, run(body) {
+  games: { name: 'Games', icon: realIcon('applications-games'), cat: 'System', w: 760, h: 560, run(body) {
     const custom = JSON.parse(localStorage.getItem('novaos.customGames') || '[]');
     const draw = () => {
       body.innerHTML = `<div class="app-head"><h3>Games</h3><p>Built-in games run offline. Web games load from their own sites.</p></div>
         <div class="section-label">Built-in</div>
         <div class="cards">${Object.entries(GAME_APPS).map(([id, g]) => card(g.icon, g.name, g.desc, `data-app="${id}"`)).join('')}</div>
+        <div class="section-label">Classics</div>
+        <div class="cards">${Object.entries(DOS_APPS).map(([id, g]) => card(g.icon, g.name, g.desc, `data-app="${id}"`)).join('')}</div>
         <div class="section-label">Web games</div>
-        <div class="cards">${[...WEB_GAMES, ...custom].map((g, i) => card({ mono: g.mono || g.name.slice(0, 2), bg: g.bg || '#52525b' }, g.name, g.custom ? 'Added by you' : new URL(g.url).hostname,
-          `data-url="${esc(g.url)}" data-name="${esc(g.name)}"`, g.custom ? `<button class="icon-btn" data-rm="${i - WEB_GAMES.length}" title="Remove">${glyph('trash', 15)}</button>` : '')).join('')}</div>
+        <div class="cards">${[...WEB_GAMES, ...custom].map((g, i) => card(g.img ? realIcon(g.img) : { mono: g.mono || g.name.slice(0, 2), bg: g.bg || '#52525b' }, g.name, g.custom ? 'Added by you' : new URL(g.url).hostname,
+          `data-url="${esc(g.url)}" data-name="${esc(g.name)}" data-img="${esc(g.img || '')}"`, g.custom ? `<button class="icon-btn" data-rm="${i - WEB_GAMES.length}" title="Remove">${glyph('trash', 15)}</button>` : '')).join('')}</div>
         <div class="section-label">Add a game</div>
         <div class="row" style="padding:0 20px 20px"><input class="gn" placeholder="Name" style="width:160px"><input class="gu grow" placeholder="https://…"><button class="primary ga">Add</button></div>`;
     };
@@ -38,62 +82,131 @@ const APPS = {
       }
       const c = e.target.closest('.card'); if (!c) return;
       if (c.dataset.app) OS.launch(c.dataset.app);
-      else WM.open({ title: c.dataset.name, icon: { mono: c.dataset.name.slice(0, 2), bg: '#52525b' }, w: 900, h: 640, content: frame(c.dataset.url) });
+      else WM.open({ title: c.dataset.name, icon: c.dataset.img ? realIcon(c.dataset.img) : { mono: c.dataset.name.slice(0, 2), bg: '#52525b' }, w: 900, h: 640, content: frame(c.dataset.url) });
     };
     draw();
   } },
 
-  vm: { name: 'Virtual PC', icon: 'vm', cat: 'System', w: 760, h: 540, run(body) {
+  vm: { name: 'Virtual PC', icon: realIcon('org.gnome.Boxes'), cat: 'System', w: 760, h: 540, run(body) {
     body.innerHTML = `<div class="app-head"><h3>Virtual PC</h3><p>Boot a real operating system inside an emulated x86 PC, powered by the open-source v86 emulator. The first boot downloads the disk image and can take a minute.</p></div>
       <div class="section-label">Choose a system</div>
-      <div class="cards" style="padding-bottom:20px">${VM_PROFILES.map(p => card({ mono: p.mono, bg: p.bg }, p.name, p.note, `data-id="${p.id}"`)).join('')}</div>`;
+      <div class="cards" style="padding-bottom:20px">${VM_PROFILES.map(p => card(vmIcon(p), p.name, p.note, `data-id="${p.id}"`)).join('')}</div>`;
     body.onclick = e => { const c = e.target.closest('.card'); if (c) this.boot(c.dataset.id); };
   },
   boot(id) {
     const p = VM_PROFILES.find(v => v.id === id);
-    const w = WM.open({ title: p.name, icon: { mono: p.mono, bg: p.bg }, w: 1060, h: 820, content: frame('https://copy.sh/v86/?profile=' + p.id) });
+    const w = WM.open({ title: p.name, icon: vmIcon(p), w: 1060, h: 820, content: frame('https://copy.sh/v86/?profile=' + p.id) });
     WM.toggleMax(w, true);
   } },
 
-  notepad: { name: 'Notepad', icon: 'notepad', cat: 'Apps', w: 620, h: 460, run(body, win, path) {
-    body.innerHTML = `<div class="fill"><div class="toolbar"><button class="ghost o">${glyph('open')}Open</button><button class="ghost s">${glyph('download')}Save</button><div class="sep"></div>
-      <input class="p grow" spellcheck="false" style="border-color:transparent;background:none"><span class="small muted st"></span></div>
-      <textarea class="grow" spellcheck="false" style="resize:none;border:0;border-radius:0;padding:14px 16px;font:13px/1.6 var(--mono);background:var(--surface)"></textarea></div>`;
-    const p = body.querySelector('.p'), ta = body.querySelector('textarea'), st = body.querySelector('.st');
-    let saved = '';
-    const status = () => { st.textContent = ta.value === saved ? '' : 'Edited'; WM.setTitle(win, p.value.split('/').pop() + (ta.value === saved ? '' : ' •') + ' — Notepad'); };
-    const load = f => { const c = FS.read(f); if (c === null) return OS.toast('File not found: ' + f); p.value = f; ta.value = saved = c; status(); };
-    p.value = path || '/Documents/untitled.txt'; if (path) load(path); else status();
-    body.querySelector('.o').onclick = () => load(p.value);
-    const save = () => { FS.write(p.value, ta.value); saved = ta.value; status(); OS.toast('Saved to ' + p.value); };
-    body.querySelector('.s').onclick = save;
-    ta.oninput = status;
-    ta.onkeydown = e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); save(); } if (e.key === 'Tab') { e.preventDefault(); ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); } };
-    setTimeout(() => ta.focus());
+  notepad: { name: 'Text Editor', icon: realIcon('org.gnome.TextEditor'), cat: 'Apps', w: 760, h: 520, run(body, win, path) {
+    body.innerHTML = `<div class="fill editor"><div class="toolbar">
+        <button class="ghost ed-open">${glyph('open')}Open</button><button class="ghost ed-save">${glyph('download')}Save</button><button class="ghost ed-saveas">Save As…</button>
+        <div class="sep"></div><span class="small ed-name"></span><span class="small muted ed-dirty"></span><span class="grow"></span>
+        <span class="small muted ed-mode"></span><button class="ghost ed-preview hidden">${glyph('external', 14)}Preview</button></div>
+      <div class="grow ed-host"><textarea spellcheck="false"></textarea></div></div>`;
+    const $e = s => body.querySelector(s);
+    let file = path || null, saved = '', cm = null;
+    const get = () => cm ? cm.getValue() : $e('textarea').value;
+    const set = v => cm ? (cm.setValue(v), cm.clearHistory()) : ($e('textarea').value = v);
+    const label = () => {
+      const name = file ? FS.base(file) : 'Untitled', dirty = get() !== saved;
+      $e('.ed-name').textContent = name; $e('.ed-dirty').textContent = dirty ? '· Edited' : '';
+      WM.setTitle(win, (dirty ? '• ' : '') + name + ' — Text Editor');
+      const ext = extOf(file || ''); $e('.ed-mode').textContent = (EDITOR_MODES[ext] || ['Plain Text'])[0];
+      $e('.ed-preview').classList.toggle('hidden', !/^html?$/.test(ext));
+      if (cm) cm.setOption('mode', (EDITOR_MODES[ext] || [0, null])[1]);
+    };
+    const load = p => { const c = FS.read(p); if (c === null) return OS.toast('Could not open ' + p); file = p; saved = c; set(c); label(); };
+    const save = async as => {
+      if (as || !file) { const p = await FilePicker(win, { mode: 'save', start: file ? FS.parent(file) : '/Documents', name: file ? FS.base(file) : 'untitled.txt' }); if (!p) return; file = p; }
+      FS.write(file, get()); saved = get(); label(); OS.toast('Saved ' + file);
+    };
+    $e('.ed-open').onclick = async () => { const p = await FilePicker(win, { mode: 'open', start: file ? FS.parent(file) : '/Documents' }); if (p) load(p); };
+    $e('.ed-save').onclick = () => save(false); $e('.ed-saveas').onclick = () => save(true);
+    $e('.ed-preview').onclick = () => WM.open({ title: 'Preview — ' + FS.base(file), icon: realIcon('firefox'), w: 800, h: 560, content: b => { const f = document.createElement('iframe'); f.srcdoc = get(); f.sandbox = 'allow-scripts allow-modals'; b.appendChild(f); } });
+    body.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(e.shiftKey); } });
+    $e('textarea').oninput = label;
+    if (file && FS.exists(file)) load(file); else label(); // a path that doesn't exist yet becomes a new file there
+    // Upgrade the textarea to CodeMirror (syntax highlighting, line numbers) when the CDN is reachable.
+    loadCodeMirror().then(() => {
+      if (!WM.wins.has(win.id)) return;
+      cm = CodeMirror.fromTextArea($e('textarea'), { lineNumbers: true, theme: document.documentElement.dataset.theme === 'light' ? 'default' : 'material-darker',
+        indentUnit: 2, tabSize: 2, lineWrapping: false, autofocus: true, extraKeys: { Tab: c => c.replaceSelection('  ') } });
+      cm.on('change', label); label();
+    }).catch(() => $e('textarea').focus());
   } },
 
-  files: { name: 'Files', icon: 'files', cat: 'Apps', w: 640, h: 440, run(body) {
-    let cwd = '/';
+  viewer: { name: 'Image Viewer', icon: realIcon('gimp'), cat: 'Apps', w: 760, h: 540, hidden: true, run(body, win, path) {
+    if (!path || !FS.exists(path)) { body.innerHTML = '<div class="empty">Open an image or PDF from Files.</div>'; return; }
+    const url = URL.createObjectURL(FS.blob(path)); win.cleanup.push(() => URL.revokeObjectURL(url));
+    WM.setTitle(win, FS.base(path) + ' — Image Viewer');
+    body.innerHTML = kindOf(path) === 'pdf' ? `<iframe src="${url}"></iframe>` : `<div class="viewer"><img src="${url}" alt=""></div>`;
+  } },
+
+  files: { name: 'Files', icon: realIcon('org.gnome.Nautilus'), cat: 'Apps', w: 820, h: 520, run(body, win, start) {
+    let cwd = start && FS.isDir(start) ? start : '/', sel = null;
+    const places = [['home', 'Home', '/'], ['notepad', 'Documents', '/Documents'], ['paint', 'Pictures', '/Pictures'], ['download', 'Downloads', '/Downloads']];
+    const fmtSize = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
+    const fileIcon = f => f.type === 'dir' ? glyph('folder', 18) : glyph({ image: 'paint', media: 'media', text: 'file', pdf: 'file' }[kindOf(f.path)] || 'file', 18);
     const draw = () => {
-      const items = FS.list(cwd);
-      body.innerHTML = `<div class="fill"><div class="toolbar"><button class="icon-btn up" title="Up">${glyph('up')}</button>
-        <span class="crumbs grow">${cwd === '/' ? 'Home' : 'Home' + esc(cwd).split('/').join(' / ')}</span>
-        <button class="ghost nf">${glyph('file')}New file</button><button class="ghost nd">${glyph('folder')}New folder</button></div>
-        <div class="grow" style="overflow:auto">${items.length ? `<ul class="list">${items.map(f => `<li class="${f.type}" data-p="${esc(f.path)}" data-t="${f.type}">${glyph(f.type === 'dir' ? 'folder' : 'file', 18)}<span>${esc(f.name)}</span>
-          <button class="icon-btn act" data-del title="Delete">${glyph('trash', 15)}</button></li>`).join('')}</ul>` : '<div class="empty">This folder is empty</div>'}</div></div>`;
-      body.querySelector('.up').onclick = () => { cwd = FS.join(cwd, '..'); draw(); };
-      body.querySelector('.nf').onclick = () => { const n = prompt('File name', 'untitled.txt'); if (n) { FS.write(FS.join(cwd, n), ''); draw(); } };
-      body.querySelector('.nd').onclick = () => { const n = prompt('Folder name', 'New folder'); if (n) { FS.mkdir(FS.join(cwd, n)); draw(); } };
-      body.querySelectorAll('li[data-p]').forEach(li => li.ondblclick = li.onclick = e => {
-        if (e.target.closest('[data-del]')) { if (confirm('Delete ' + li.dataset.p + '?')) { FS.rm(li.dataset.p); draw(); } return; }
-        if (e.type === 'click' && li.dataset.t !== 'dir') return;
-        if (li.dataset.t === 'dir') { cwd = li.dataset.p; draw(); } else OS.launch('notepad', li.dataset.p);
-      });
+      const items = FS.list(cwd), crumbs = cwd.split('/').filter(Boolean);
+      body.innerHTML = `<div class="files-app"><nav>${places.map(([g, n, p]) => `<button data-go="${p}" class="${cwd === p ? 'on' : ''}">${glyph(g)}${n}</button>`).join('')}</nav>
+        <div class="fill" style="flex:1;min-width:0"><div class="toolbar"><button class="icon-btn up" title="Up" ${cwd === '/' ? 'disabled' : ''}>${glyph('up')}</button>
+          <span class="crumbs grow"><a data-go="/">Home</a>${crumbs.map((c, i) => ` / <a data-go="/${crumbs.slice(0, i + 1).join('/')}">${esc(c)}</a>`).join('')}</span>
+          <button class="ghost nd">${glyph('folder')}New Folder</button><button class="ghost nf">${glyph('file')}New File</button><button class="primary up-btn">${glyph('download')}Upload</button>
+          <input type="file" multiple hidden></div>
+        <div class="grow drop" style="overflow:auto">${items.length ? `<table class="ftable"><thead><tr><th>Name</th><th>Size</th><th>Modified</th><th></th></tr></thead><tbody>${items.map(f => {
+          const n = FS.stat(f.path);
+          return `<tr data-p="${esc(f.path)}" class="${f.type}${sel === f.path ? ' sel' : ''}"><td><span class="fname">${fileIcon(f)}<span>${esc(f.name)}</span></span></td>
+            <td class="muted">${f.type === 'dir' ? FS.list(f.path).length + ' items' : fmtSize(FS.size(f.path))}</td><td class="muted">${n.mtime ? new Date(n.mtime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—'}</td>
+            <td class="acts">${f.type === 'file' ? `<button class="icon-btn" data-act="download" title="Download">${glyph('download', 15)}</button>` : ''}<button class="icon-btn" data-act="menu" title="More">${glyph('grid', 15)}</button></td></tr>`;
+        }).join('')}</tbody></table>` : '<div class="empty">This folder is empty.<br><span class="small">Drag files here from your computer to upload them.</span></div>'}</div></div></div>`;
     };
+    const open = (p, withApp) => {
+      if (FS.isDir(p)) { cwd = p; sel = null; return draw(); }
+      const app = withApp || { text: 'notepad', image: 'viewer', pdf: 'viewer', media: 'media' }[kindOf(p)];
+      if (app) OS.launch(app, p); else download(p);
+    };
+    const download = p => { const a = document.createElement('a'); a.href = URL.createObjectURL(FS.blob(p)); a.download = FS.base(p); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
+    const rename = p => { const n = prompt('Rename to', FS.base(p)); if (n && n !== FS.base(p) && !n.includes('/')) { if (!FS.mv(p, FS.join(FS.parent(p), n))) OS.toast('A file with that name already exists.'); } };
+    const remove = p => { if (confirm(`Delete “${FS.base(p)}”?`)) FS.rm(p); };
+    const upload = async files => {
+      for (const f of files) FS.writeBytes(FS.freeName(cwd, f.name), new Uint8Array(await f.arrayBuffer()), f.type || undefined);
+      OS.toast(`Uploaded ${files.length} file${files.length === 1 ? '' : 's'} to ${cwd === '/' ? 'Home' : FS.base(cwd)}`);
+    };
+    const menu = (p, x, y) => {
+      const isDir = FS.isDir(p), items = [['open', 'Open', () => open(p)]];
+      if (!isDir) items.push(['notepad', 'Open with Text Editor', () => open(p, 'notepad')], ['paint', 'Open with Image Viewer', () => open(p, 'viewer')], ['media', 'Open with Videos', () => open(p, 'media')], ['download', 'Download', () => download(p)]);
+      items.push('-', ['notepad', 'Rename…', () => rename(p)], ['trash', 'Delete', () => remove(p)]);
+      OS.menu($('#ctx-menu'), items, x, y);
+    };
+    body.onclick = e => {
+      const go = e.target.closest('[data-go]'); if (go) { cwd = go.dataset.go; sel = null; return draw(); }
+      const row = e.target.closest('tr[data-p]'), act = e.target.closest('[data-act]');
+      if (act && row) { e.stopPropagation(); if (act.dataset.act === 'download') return download(row.dataset.p); const r = act.getBoundingClientRect(); return menu(row.dataset.p, r.left - 160, r.bottom + 4); }
+      if (row) { sel = row.dataset.p; body.querySelectorAll('tr.sel').forEach(r => r.classList.remove('sel')); row.classList.add('sel'); return; }
+      if (e.target.closest('.up')) { cwd = FS.parent(cwd); return draw(); }
+      if (e.target.closest('.nd')) { const n = prompt('Folder name', 'New Folder'); if (n) FS.mkdir(FS.freeName(cwd, n)); }
+      if (e.target.closest('.nf')) { const n = prompt('File name', 'untitled.txt'); if (n) { const p = FS.freeName(cwd, n); FS.write(p, ''); OS.launch('notepad', p); } }
+      if (e.target.closest('.up-btn')) body.querySelector('input[type=file]').click();
+    };
+    body.ondblclick = e => { const row = e.target.closest('tr[data-p]'); if (row) open(row.dataset.p); };
+    body.oncontextmenu = e => { const row = e.target.closest('tr[data-p]'); if (row) { e.preventDefault(); menu(row.dataset.p, e.clientX, e.clientY); } };
+    body.onchange = e => { if (e.target.type === 'file' && e.target.files.length) upload([...e.target.files]); };
+    body.onkeydown = e => { if (!sel || e.target.tagName === 'INPUT') return; if (e.key === 'Delete') remove(sel); if (e.key === 'F2') rename(sel); if (e.key === 'Enter') open(sel); };
+    body.tabIndex = 0;
+    // Drag and drop from the real desktop
+    body.ondragover = e => { if ([...e.dataTransfer.types].includes('Files')) { e.preventDefault(); body.querySelector('.drop')?.classList.add('over'); } };
+    body.ondragleave = e => { if (!body.contains(e.relatedTarget)) body.querySelector('.drop')?.classList.remove('over'); };
+    body.ondrop = e => { e.preventDefault(); body.querySelector('.drop')?.classList.remove('over'); if (e.dataTransfer.files.length) upload([...e.dataTransfer.files]); };
+    // Stay in sync with changes made by other apps (Text Editor, Linux, Paint…)
+    const onFs = () => { if (!FS.isDir(cwd)) cwd = '/'; draw(); };
+    addEventListener('fs-change', onFs); win.cleanup.push(() => removeEventListener('fs-change', onFs));
     draw();
   } },
 
-  terminal: { name: 'Terminal', icon: 'terminal', cat: 'Apps', w: 680, h: 420, run(body) {
+  terminal: { name: 'Terminal', icon: realIcon('org.gnome.Console'), cat: 'Apps', w: 680, h: 420, run(body) {
     body.innerHTML = '<div class="term"><div class="out"></div><span class="ps"></span><input spellcheck="false" autocomplete="off"></div>';
     const out = body.querySelector('.out'), inp = body.querySelector('input'), ps = body.querySelector('.ps'); let cwd = '/', hist = [], hi = 0;
     const print = s => { out.textContent += s + '\n'; body.firstChild.scrollTop = 1e9; };
@@ -123,7 +236,7 @@ const APPS = {
     body.onclick = () => getSelection().isCollapsed && inp.focus(); print('NovaOS shell. Type "help" for commands.\n'); prompt_(); setTimeout(() => inp.focus());
   } },
 
-  calc: { name: 'Calculator', icon: 'calc', cat: 'Apps', w: 320, h: 460, run(body, win) {
+  calc: { name: 'Calculator', icon: realIcon('accessories-calculator'), cat: 'Apps', w: 320, h: 460, run(body, win) {
     let expr = '', last = '';
     const keys = [['C', 'op'], ['(', 'op'], [')', 'op'], ['÷', 'op'], ['7'], ['8'], ['9'], ['×', 'op'], ['4'], ['5'], ['6'], ['−', 'op'], ['1'], ['2'], ['3'], ['+', 'op'], ['0'], ['.'], ['⌫', 'op'], ['=', 'eq']];
     body.innerHTML = `<div class="calc"><div class="disp"><small></small><div>0</div></div>${keys.map(([k, c]) => `<button class="${c || ''}">${k}</button>`).join('')}</div>`;
@@ -144,16 +257,18 @@ const APPS = {
     });
   } },
 
-  browser: { name: 'Browser', icon: 'browser', cat: 'Apps', w: 1040, h: 700, run: (body, win, url) => BrowserApp(body, win, { url }) },
+  linux: { name: 'Linux', icon: realIcon('tux'), cat: 'System', w: 860, h: 560, run: LinuxApp },
 
-  store: { name: 'App Store', icon: 'store', cat: 'System', w: 780, h: 560, run(body) {
+  browser: { name: 'Browser', icon: realIcon('firefox'), cat: 'Apps', w: 1040, h: 700, run: (body, win, url) => BrowserApp(body, win, { url }) },
+
+  store: { name: 'App Store', icon: realIcon('org.gnome.Software'), cat: 'System', w: 780, h: 560, run(body) {
     let q = '';
     const draw = () => {
       const inst = OS.cfg.installed || [], cats = [...new Set(STORE.map(s => s.cat))];
       const match = s => !q || (s.name + s.desc).toLowerCase().includes(q);
       body.innerHTML = `<div class="app-head row" style="justify-content:space-between"><div><h3>App Store</h3><p>Install web apps to your desktop. They open through the proxy browser.</p></div>
         <input class="sq" placeholder="Search" style="width:200px" value="${esc(q)}"></div>` +
-        cats.map(c => { const list = STORE.filter(s => s.cat === c && match(s)); return list.length ? `<div class="section-label">${c}</div><div class="cards">${list.map(s => card({ mono: s.mono, bg: s.bg }, s.name, s.desc, `data-id="${s.id}"`,
+        cats.map(c => { const list = STORE.filter(s => s.cat === c && match(s)); return list.length ? `<div class="section-label">${c}</div><div class="cards">${list.map(s => card(s.img ? realIcon(s.img) : { mono: s.mono, bg: s.bg }, s.name, s.desc, `data-id="${s.id}"`,
           inst.includes(s.id) ? `<button data-open="${s.id}">Open</button><button class="icon-btn" data-rm="${s.id}" title="Uninstall">${glyph('trash', 15)}</button>` : `<button class="primary" data-add="${s.id}">Get</button>`)).join('')}</div>` : ''; }).join('') +
         '<div style="height:20px"></div>';
       const sq = body.querySelector('.sq'); sq.oninput = () => { q = sq.value.toLowerCase(); draw(); const n = body.querySelector('.sq'); n.focus(); n.setSelectionRange(99, 99); };
@@ -167,7 +282,7 @@ const APPS = {
     draw();
   } },
 
-  media: { name: 'Media Player', icon: 'media', cat: 'Apps', w: 780, h: 500, run(body, win) {
+  media: { name: 'Videos', icon: realIcon('org.gnome.Totem'), cat: 'Apps', w: 780, h: 500, run(body, win, path) {
     body.innerHTML = `<div class="fill"><div class="toolbar"><button class="ghost of">${glyph('open')}Open files</button><input type="file" accept="audio/*,video/*" multiple hidden>
       <div class="sep"></div><input class="mu grow" placeholder="Paste a direct link to an .mp4, .webm or .mp3 file"><button class="mg">Play</button></div>
       <div class="grow" style="display:flex;min-height:0"><video controls style="flex:1;min-width:0;background:#000"></video>
@@ -181,9 +296,10 @@ const APPS = {
     pl.onclick = e => { const li = e.target.closest('li'); if (li) play(+li.dataset.i); };
     v.onended = () => idx + 1 < list.length && play(idx + 1);
     win.cleanup.push(() => urls.forEach(u => URL.revokeObjectURL(u)));
+    if (path && FS.exists(path)) { const src = URL.createObjectURL(FS.blob(path)); urls.push(src); list.push({ name: FS.base(path), src }); play(0); }
   } },
 
-  paint: { name: 'Paint', icon: 'paint', cat: 'Apps', w: 760, h: 540, run(body) {
+  paint: { name: 'Paint', icon: realIcon('kolourpaint'), cat: 'Apps', w: 760, h: 540, run(body) {
     const colors = ['#18181b', '#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ffffff'];
     body.innerHTML = `<div class="fill"><div class="toolbar"><div class="swatches">${colors.map((c, i) => `<button data-c="${c}" style="background:${c}" class="${i ? '' : 'on'}"></button>`).join('')}</div>
       <input type="color" value="#18181b" title="Custom color"><div class="sep"></div><span class="small muted">Size</span><input type="range" min="1" max="40" value="4" style="width:100px">
@@ -201,10 +317,13 @@ const APPS = {
     body.querySelector('[type=color]').oninput = e => { color = e.target.value; erase = false; body.querySelectorAll('.swatches button').forEach(s => s.classList.remove('on')); };
     body.querySelector('.e').onclick = e => { erase = !erase; e.currentTarget.classList.toggle('on', erase); };
     body.querySelector('.c').onclick = () => { x.fillStyle = '#fff'; x.fillRect(0, 0, cv.width, cv.height); };
-    body.querySelector('.s').onclick = () => { const a = document.createElement('a'); a.download = 'drawing.png'; a.href = cv.toDataURL(); a.click(); };
+    body.querySelector('.s').onclick = async () => {
+      const p = await FilePicker(win, { mode: 'save', start: '/Pictures', name: 'drawing.png' }); if (!p) return;
+      cv.toBlob(async b => { FS.writeBytes(p, new Uint8Array(await b.arrayBuffer()), 'image/png'); OS.toast('Saved ' + p); }, 'image/png');
+    };
   } },
 
-  taskmgr: { name: 'Task Manager', icon: 'taskmgr', cat: 'System', w: 480, h: 400, run(body, win) {
+  taskmgr: { name: 'System Monitor', icon: realIcon('gnome-system-monitor'), cat: 'System', w: 480, h: 400, run(body, win) {
     const draw = () => {
       const mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(0) + ' MB' : '—';
       const others = [...WM.wins.values()].filter(w => w !== win);
@@ -216,7 +335,7 @@ const APPS = {
     draw(); loop(win, draw, 2000);
   } },
 
-  settings: { name: 'Settings', icon: 'settings', cat: 'System', w: 760, h: 540, run(body, win, page = 'appearance') {
+  settings: { name: 'Settings', icon: realIcon('org.gnome.Settings'), cat: 'System', w: 760, h: 540, run(body, win, page = 'appearance') {
     const pages = { appearance: ['paint', 'Appearance'], users: ['user', 'Users'], proxy: ['shield', 'Proxy'], privacy: ['lock', 'Privacy'], system: ['settings', 'System'] };
     const row = (l, s, ctl) => `<div class="set-row"><div class="l"><span>${l}</span>${s ? `<small>${s}</small>` : ''}</div>${ctl}</div>`;
     const draw = () => {
@@ -227,7 +346,9 @@ const APPS = {
         <div><div class="small muted" style="margin-bottom:8px">Wallpaper</div><div class="walls">${Object.entries(WALLPAPERS).map(([n, w]) => `<button data-wall="${n}" title="${n}" style="background:${w}" class="${(c.wall || WALLPAPERS.Graphite) === w ? 'on' : ''}"></button>`).join('')}</div></div>
         <div class="row"><input class="iu grow" placeholder="Or paste an image URL"><button class="ib">Use image</button></div>`;
       if (page === 'proxy') html = `<h3>Proxy</h3>
-        ${row('Use proxy in Browser', 'Routes pages through Ultraviolet so blocked sites can load', `<div class="seg">${['on', 'off'].map(v => `<button data-proxy="${v}" class="${(c.proxy !== false) === (v === 'on') ? 'on' : ''}">${v === 'on' ? 'On' : 'Off'}</button>`).join('')}</div>`)}
+        ${row('Engine', 'Scramjet handles modern sites like YouTube and Discord. Ultraviolet is the older fallback.', `<div class="seg">${Object.entries(WebProxy.ENGINES).map(([k, n]) => `<button data-engine="${k}" class="${WebProxy.engine() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+        ${row('Transport', 'How traffic reaches the Wisp server. Both are end-to-end encrypted.', `<div class="seg">${Object.entries(WebProxy.TRANSPORTS).map(([k, n]) => `<button data-transport="${k}" class="${WebProxy.transport() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+        ${row('Use proxy in Browser', 'Routes pages through the proxy so blocked sites can load', `<div class="seg">${['on', 'off'].map(v => `<button data-proxy="${v}" class="${(c.proxy !== false) === (v === 'on') ? 'on' : ''}">${v === 'on' ? 'On' : 'Off'}</button>`).join('')}</div>`)}
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Wisp server</span><small>Leave blank to pick automatically: this site's own server if it has one (<code>npm start</code>), otherwise a public server.</small></div>
         <div class="row"><input class="ws grow" placeholder="Automatic" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
         <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>`;
@@ -257,6 +378,8 @@ const APPS = {
       if (d.page) { page = d.page; return draw(); }
       if (d.theme) OS.set({ theme: d.theme }); if (d.accent) OS.set({ accent: d.accent }); if (d.wall) OS.set({ wall: WALLPAPERS[d.wall] });
       if (d.proxy) OS.set({ proxy: d.proxy === 'on' });
+      if (d.engine) OS.set({ engine: d.engine });
+      if (d.transport) { OS.set({ transport: d.transport }); try { await WebProxy.ready(); await WebProxy.setTransport(); } catch (err) { OS.toast(err.message); } }
       if (d.fast) OS.set({ fastBoot: d.fast === 'skip' });
       if (d.rmuser && confirm('Remove this user? Their files stay on this computer.')) Users.remove(d.rmuser);
       if (b.classList.contains('setpw')) {
@@ -265,7 +388,7 @@ const APPS = {
         await Users.setPassword(OS.user, a); OS.account = Users.get(OS.user); OS.toast(a ? 'Password changed' : 'Password removed');
       }
       if (b.classList.contains('ib')) { const u = body.querySelector('.iu').value.trim(); if (u) OS.set({ wall: `url("${u.replace(/["\\]/g, '')}") center/cover` }); }
-      if (b.classList.contains('wb')) { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await Proxy.ready(); await Proxy.setTransport(); OS.toast('Proxy server saved'); } catch (err) { OS.toast(err.message); } }
+      if (b.classList.contains('wb')) { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await WebProxy.ready(); await WebProxy.setTransport(); OS.toast('Proxy server saved'); } catch (err) { OS.toast(err.message); } }
       if (b.classList.contains('blank')) OS.openBlank(location.href);
       if (b.classList.contains('pb')) { OS.set({ panicKey: body.querySelector('.pk').value, panicUrl: body.querySelector('.pu').value.trim() }); OS.toast('Panic key saved'); }
       if (b.classList.contains('about')) OS.launch('about');
@@ -284,14 +407,14 @@ const APPS = {
 };
 
 const GAME_APPS = {
-  snake: { name: 'Snake', icon: 'snake', cat: 'Games', desc: 'Classic arcade', w: 460, h: 560, run: GAMES.snake },
-  g2048: { name: '2048', icon: 'g2048', cat: 'Games', desc: 'Slide and merge tiles', w: 420, h: 520, run: GAMES.g2048 },
-  mines: { name: 'Minesweeper', icon: 'mines', cat: 'Games', desc: '12 × 12, 20 mines', w: 420, h: 520, run: GAMES.minesweeper },
-  ttt: { name: 'Tic-Tac-Toe', icon: 'ttt', cat: 'Games', desc: 'Against an unbeatable CPU', w: 340, h: 460, run: GAMES.tictactoe },
-  breakout: { name: 'Breakout', icon: 'breakout', cat: 'Games', desc: 'Break every brick', w: 540, h: 520, run: GAMES.breakout },
+  snake: { name: 'Snake', icon: realIcon('org.gnome.Nibbles'), cat: 'Games', desc: 'Classic arcade', w: 460, h: 560, run: GAMES.snake },
+  g2048: { name: '2048', icon: realIcon('gnome-2048'), cat: 'Games', desc: 'Slide and merge tiles', w: 420, h: 520, run: GAMES.g2048 },
+  mines: { name: 'Minesweeper', icon: realIcon('org.gnome.Mines'), cat: 'Games', desc: '12 × 12, 20 mines', w: 420, h: 520, run: GAMES.minesweeper },
+  ttt: { name: 'Tic-Tac-Toe', icon: realIcon('gnome-tali'), cat: 'Games', desc: 'Against an unbeatable CPU', w: 340, h: 460, run: GAMES.tictactoe },
+  breakout: { name: 'Breakout', icon: realIcon('lbreakout2'), cat: 'Games', desc: 'Break every brick', w: 540, h: 520, run: GAMES.breakout },
   flappy: { name: 'Flappy', icon: 'flappy', cat: 'Games', desc: 'Tap to fly', w: 400, h: 620, run: GAMES.flappy },
 };
-const ALL_APPS = { ...APPS, ...GAME_APPS };
+const ALL_APPS = { ...APPS, ...GAME_APPS, ...DOS_APPS };
 
 // Tab disguises: page title + favicon.
 const CLOAKS = {

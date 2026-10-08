@@ -1,0 +1,4 @@
+libv86.js and v86.wasm: v86 by Fabian Hemmer and contributors, BSD-2-Clause (see LICENSE). https://github.com/copy/v86
+seabios.bin / vgabios.bin: SeaBIOS (LGPL-3.0), as distributed in the v86 repository (bios/).
+buildroot-bzimage68.bin: Linux 6.8 + Buildroot userland, built by the v86 project (GPL-2.0 and others).
+  Source: https://github.com/torvalds/linux and https://buildroot.org — build configuration in the v86 repository.

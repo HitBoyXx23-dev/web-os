@@ -4,7 +4,7 @@
   let base = '/';
   try {
     const src = self.document ? document.currentScript.src : self.location.href;
-    base = new URL(src).pathname.replace(/uv\/[^/]*$/, '');
+    base = new URL(src).pathname.replace(/(uv\/)?[^/]*$/, ''); // works from /uv/uv.config.js and from /sw.js
   } catch (e) {}
   self.__uv$config = {
     prefix: base + 'uv/service/',

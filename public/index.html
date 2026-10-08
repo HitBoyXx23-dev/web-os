@@ -8,6 +8,9 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/os.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icons/app-192.png">
 </head>
 <body>
 <template id="mark-tpl">
@@ -67,6 +70,7 @@
 
 <div id="off" class="hidden"><div class="mark-slot" style="color:#3f3f46"></div><button class="ghost" onclick="location.reload()" style="color:#a1a1aa">Power on</button></div>
 
+<script src="scram/scramjet.all.js"></script>
 <script src="uv/uv.bundle.js"></script>
 <script src="uv/uv.config.js"></script>
 <script src="baremux/index.js"></script>
@@ -74,7 +78,9 @@
 <script src="js/fs.js"></script>
 <script src="js/wm.js"></script>
 <script src="js/games.js"></script>
+<script src="js/dos.js"></script>
 <script src="js/browser.js"></script>
+<script src="js/linux.js"></script>
 <script src="js/apps.js"></script>
 <script src="js/users.js"></script>
 <script src="js/os.js"></script>

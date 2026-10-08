@@ -99,7 +99,7 @@ const OS = {
     WM.onChange = () => { this.renderDock(); this.renderTop(); };
 
     this.renderIcons = () => {
-      const ids = ['browser', 'games', 'vm', 'store', 'files', 'terminal', ...Object.keys(ALL_APPS).filter(id => id.startsWith('web:'))];
+      const ids = ['browser', 'games', 'vm', 'linux', 'store', 'files', 'terminal', ...Object.keys(ALL_APPS).filter(id => id.startsWith('web:'))];
       $('#icons').innerHTML = ids.map(id => `<div class="icon" data-id="${id}">${tile(ALL_APPS[id].icon, 44)}<span>${esc(ALL_APPS[id].name)}</span></div>`).join('');
     };
     this.renderIcons();
@@ -207,7 +207,7 @@ const OS = {
       $('#l-grid').innerHTML = hits.length ? `<div class="l-grid">${hits.map(cell).join('')}</div>` : `<div class="empty">No applications match “${esc(q)}”<br><br><button class="primary" id="web-search">${glyph('search', 14)}Search the web</button></div>`;
       return;
     }
-    const apps = Object.keys(APPS).filter(id => id !== 'about'), games = Object.keys(GAME_APPS), web = Object.keys(ALL_APPS).filter(i => i.startsWith('web:'));
+    const apps = Object.keys(APPS).filter(id => id !== 'about' && !APPS[id].hidden), games = [...Object.keys(GAME_APPS), ...Object.keys(DOS_APPS)], web = Object.keys(ALL_APPS).filter(i => i.startsWith('web:'));
     $('#l-grid').innerHTML = `<div class="l-sec">Applications</div><div class="l-grid">${apps.map(cell).join('')}</div>
       <div class="l-sec">Games</div><div class="l-grid">${games.map(cell).join('')}</div>` +
       (web.length ? `<div class="l-sec">Installed</div><div class="l-grid">${web.map(cell).join('')}</div>` : '');
@@ -246,7 +246,7 @@ const OS = {
       this.renderQuick(); this.updateProxyDot();
     };
     q.querySelector('[data-q=brightness]').oninput = e => this.set({ brightness: +e.target.value });
-    this.proxyStatus().then(([ok, msg]) => { const s = $('#qs-px'); if (s) s.textContent = ok ? new URL(Proxy.wispUrl()).host : c.proxy === false ? 'Off' : 'Unavailable'; });
+    this.proxyStatus().then(([ok, msg]) => { const s = $('#qs-px'); if (s) s.textContent = ok ? new URL(WebProxy.wispUrl()).host : c.proxy === false ? 'Off' : 'Unavailable'; });
   },
   renderCalendar(offset = 0) {
     const now = new Date(), m = new Date(now.getFullYear(), now.getMonth() + offset, 1);
@@ -266,7 +266,7 @@ const OS = {
   },
   async proxyStatus() {
     if (this.cfg.proxy === false) return [false, 'Proxy off — sites load directly'];
-    try { await Proxy.ready(); return [true, 'Proxy connected via ' + new URL(Proxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
+    try { await WebProxy.ready(); return [true, 'Proxy connected via ' + new URL(WebProxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
   },
   updateProxyDot() { this.proxyStatus().then(([ok]) => { const d = $('#px-dot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'bad'); }); },
 
@@ -280,4 +280,8 @@ const OS = {
   },
 };
 
-OS.load(); OS.syncApps(); OS.initDesktop(); Boot.start(); OS.updateProxyDot();
+OS.load(); OS.syncApps(); OS.initDesktop();
+FS.ready.then(() => Boot.start());
+// Register the service worker right away so NovaOS works offline and can be installed as an app.
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(() => {});
+OS.updateProxyDot();

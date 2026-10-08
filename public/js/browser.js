@@ -1,9 +1,13 @@
-// Proxy browser (Ultraviolet over Wisp via bare-mux + epoxy) and the App Store catalog.
+// Proxy browser (Scramjet or Ultraviolet over Wisp via bare-mux) and the App Store catalog.
 const BASE = location.pathname.replace(/[^/]*$/, '');
 
-const Proxy = {
-  _ready: null,
-  supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.__uv$config && self.BareMux; },
+const WebProxy = {
+  _ready: null, _sj: null,
+  ENGINES: { scramjet: 'Scramjet', uv: 'Ultraviolet' },
+  TRANSPORTS: { libcurl: 'libcurl', epoxy: 'Epoxy' },
+  engine() { return this.ENGINES[OS.cfg.engine] ? OS.cfg.engine : 'scramjet'; },
+  transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'libcurl'; },
+  supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.$scramjetLoadController && self.__uv$config; },
   // Public Wisp server used when this site has no Wisp endpoint of its own (static hosts like Vercel or GitHub Pages).
   PUBLIC_WISP: 'wss://wisp.mercurywork.shop/',
   _auto: null,
@@ -22,19 +26,32 @@ const Proxy = {
       ? 'The proxy needs NovaOS to be served over http(s), not opened as a file.'
       : 'This browser does not support service workers.'));
     return this._ready ||= (async () => {
-      const reg = await navigator.serviceWorker.register(BASE + 'uv/sw.js', { scope: __uv$config.prefix });
-      const sw = reg.installing || reg.waiting || reg.active;
-      if (sw.state !== 'activated') await new Promise(r => sw.addEventListener('statechange', () => sw.state === 'activated' && r()));
+      const { ScramjetController } = $scramjetLoadController();
+      this._sj = new ScramjetController({
+        prefix: BASE + 'scramjet/',
+        files: { wasm: BASE + 'scram/scramjet.wasm.wasm', all: BASE + 'scram/scramjet.all.js', sync: BASE + 'scram/scramjet.sync.js' },
+      });
+      await this._sj.init();
+      // Older versions registered a worker under /uv/; the root worker now handles both engines.
+      for (const r of await navigator.serviceWorker.getRegistrations()) if (r.scope !== new URL(BASE, location).href) await r.unregister();
+      await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE });
+      await navigator.serviceWorker.ready;
       await this.setTransport();
     })().catch(e => { this._ready = null; throw e; });
   },
   async setTransport() {
     if (!(OS.cfg.wisp || '').trim()) this._auto = await this.probe(this.ownWisp()) ? this.ownWisp() : this.PUBLIC_WISP;
     const conn = new BareMux.BareMuxConnection(BASE + 'baremux/worker.js');
-    await conn.setTransport(BASE + 'epoxy/index.mjs', [{ wisp: this.wispUrl() }]);
+    if (this.transport() === 'libcurl') await conn.setTransport(BASE + 'libcurl/index.mjs', [{ websocket: this.wispUrl() }]);
+    else await conn.setTransport(BASE + 'epoxy/index.mjs', [{ wisp: this.wispUrl() }]);
   },
-  encode(url) { return __uv$config.prefix + __uv$config.encodeUrl(url); },
-  decode(path) { return path.startsWith(__uv$config.prefix) ? __uv$config.decodeUrl(path.slice(__uv$config.prefix.length)) : null; },
+  encode(url) { return this.engine() === 'uv' ? __uv$config.prefix + __uv$config.encodeUrl(url) : this._sj.encodeUrl(url); },
+  // Real URL behind a proxied path+query, from either engine.
+  decode(path) {
+    if (path.startsWith(__uv$config.prefix)) return __uv$config.decodeUrl(path.slice(__uv$config.prefix.length));
+    if (this._sj && path.startsWith(BASE + 'scramjet/')) { try { return this._sj.decodeUrl(location.origin + path); } catch (e) {} }
+    return null;
+  },
 };
 
 // Turn whatever was typed into a URL (or a search).
@@ -47,11 +64,11 @@ function toUrl(v) {
 
 const QUICK_LINKS = [
   { name: 'Google', mono: 'G', bg: '#4285f4', url: 'https://www.google.com' },
-  { name: 'YouTube', mono: 'YT', bg: '#dc2626', url: 'https://www.youtube.com' },
-  { name: 'Discord', mono: 'Dc', bg: '#5865f2', url: 'https://discord.com/app' },
-  { name: 'Reddit', mono: 'R', bg: '#ff4500', url: 'https://www.reddit.com' },
+  { name: 'YouTube', img: 'youtube', mono: 'YT', bg: '#dc2626', url: 'https://www.youtube.com' },
+  { name: 'Discord', img: 'discord', mono: 'Dc', bg: '#5865f2', url: 'https://discord.com/app' },
+  { name: 'Reddit', img: 'reddit', mono: 'R', bg: '#ff4500', url: 'https://www.reddit.com' },
   { name: 'Poki', mono: 'Po', bg: '#0ea5e9', url: 'https://poki.com' },
-  { name: 'Wikipedia', mono: 'W', bg: '#3f3f46', url: 'https://en.wikipedia.org' },
+  { name: 'Wikipedia', img: 'wikipedia', mono: 'W', bg: '#3f3f46', url: 'https://en.wikipedia.org' },
 ];
 const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
 const monoOf = u => { const h = hostOf(u); return h.charAt(0).toUpperCase() + (h.charAt(1) || ''); };
@@ -90,7 +107,7 @@ function BrowserApp(body, win, opts = {}) {
   const homeHtml = () => `<div class="newtab-page"><div class="nt-brand"><span style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML.replace('class="mark"', 'class="mark" style="width:30px;height:30px"')}</span>Search</div>
     <div class="nt-q">${glyph('search', 18)}<input placeholder="Search the web or type an address" spellcheck="false"></div>
     <div class="shortcuts">${[...QUICK_LINKS, ...(OS.cfg.bookmarks || []).map(b => ({ name: b.title, url: b.url }))].slice(0, 16).map(l =>
-      `<div class="app-cell" data-url="${esc(l.url)}" title="${esc(l.url)}">${tile({ mono: l.mono || monoOf(l.url), bg: l.bg || '#52525b' }, 40)}<span style="max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.name)}</span></div>`).join('')}</div>
+      `<div class="app-cell" data-url="${esc(l.url)}" title="${esc(l.url)}">${tile(l.img ? realIcon(l.img) : { mono: l.mono || monoOf(l.url), bg: l.bg || '#52525b' }, 40)}<span style="max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.name)}</span></div>`).join('')}</div>
     <div class="status-line"><span class="dot"></span><span class="nt-status">${proxyOn() ? 'Connecting to proxy…' : 'Proxy is off. Sites load directly.'}</span></div></div>`;
 
   const select = t => {
@@ -122,7 +139,7 @@ function BrowserApp(body, win, opts = {}) {
     loading(true);
     if (proxyOn()) {
       t.el.innerHTML = '';
-      try { await Proxy.ready(); src = Proxy.encode(url); }
+      try { await WebProxy.ready(); src = WebProxy.encode(url); }
       catch (e) {
         loading(false);
         t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
@@ -139,7 +156,7 @@ function BrowserApp(body, win, opts = {}) {
     f.onload = () => {
       loading(false);
       try { // same-origin when proxied: read the real URL and title
-        const real = Proxy.decode(f.contentWindow.location.pathname + f.contentWindow.location.search);
+        const real = WebProxy.decode(f.contentWindow.location.pathname + f.contentWindow.location.search + f.contentWindow.location.hash);
         if (real) t.url = real;
         t.title = f.contentDocument.title || hostOf(t.url);
         // links that try to open new windows open as new tabs instead
@@ -169,27 +186,32 @@ function BrowserApp(body, win, opts = {}) {
   };
   $b('.bmbar').onclick = e => { const b = e.target.closest('button'); if (b) navigate(cur, OS.cfg.bookmarks[b.dataset.i].url); };
   $b('.px').onclick = () => { OS.set({ proxy: !proxyOn() }); renderPx(); if (cur.url) navigate(cur, cur.url); else home(cur); };
-  $b('.pop').onclick = () => cur.url && OS.openBlank(proxyOn() && Proxy.supported() ? location.origin + Proxy.encode(cur.url) : cur.url);
+  $b('.pop').onclick = async () => {
+    if (!cur.url) return;
+    let url = cur.url;
+    if (proxyOn()) { try { await WebProxy.ready(); url = location.origin + WebProxy.encode(cur.url); } catch (e) {} }
+    OS.openBlank(url);
+  };
   renderPx(); newTab(opts.url);
 }
 
 // App Store catalog: web apps that open through the proxy browser in app mode.
 const STORE = [
-  { id: 'youtube', name: 'YouTube', mono: 'YT', bg: '#dc2626', desc: 'Videos and music', url: 'https://www.youtube.com', cat: 'Entertainment' },
-  { id: 'spotify', name: 'Spotify', mono: 'Sp', bg: '#16a34a', desc: 'Music and podcasts', url: 'https://open.spotify.com', cat: 'Entertainment' },
-  { id: 'twitch', name: 'Twitch', mono: 'Tw', bg: '#7c3aed', desc: 'Live streams', url: 'https://www.twitch.tv', cat: 'Entertainment' },
-  { id: 'soundcloud', name: 'SoundCloud', mono: 'SC', bg: '#ea580c', desc: 'Independent music', url: 'https://soundcloud.com', cat: 'Entertainment' },
-  { id: 'discord', name: 'Discord', mono: 'Dc', bg: '#5865f2', desc: 'Chat with friends', url: 'https://discord.com/app', cat: 'Social' },
-  { id: 'reddit', name: 'Reddit', mono: 'R', bg: '#ff4500', desc: 'Communities', url: 'https://www.reddit.com', cat: 'Social' },
-  { id: 'tiktok', name: 'TikTok', mono: 'Tk', bg: '#18181b', desc: 'Short videos', url: 'https://www.tiktok.com', cat: 'Social' },
+  { id: 'youtube', img: 'youtube', name: 'YouTube', mono: 'YT', bg: '#dc2626', desc: 'Videos and music', url: 'https://www.youtube.com', cat: 'Entertainment' },
+  { id: 'spotify', img: 'spotify', name: 'Spotify', mono: 'Sp', bg: '#16a34a', desc: 'Music and podcasts', url: 'https://open.spotify.com', cat: 'Entertainment' },
+  { id: 'twitch', img: 'gnome-twitch', name: 'Twitch', mono: 'Tw', bg: '#7c3aed', desc: 'Live streams', url: 'https://www.twitch.tv', cat: 'Entertainment' },
+  { id: 'soundcloud', img: 'soundcloud', name: 'SoundCloud', mono: 'SC', bg: '#ea580c', desc: 'Independent music', url: 'https://soundcloud.com', cat: 'Entertainment' },
+  { id: 'discord', img: 'discord', name: 'Discord', mono: 'Dc', bg: '#5865f2', desc: 'Chat with friends', url: 'https://discord.com/app', cat: 'Social' },
+  { id: 'reddit', img: 'reddit', name: 'Reddit', mono: 'R', bg: '#ff4500', desc: 'Communities', url: 'https://www.reddit.com', cat: 'Social' },
+  { id: 'tiktok', img: 'tiktok', name: 'TikTok', mono: 'Tk', bg: '#18181b', desc: 'Short videos', url: 'https://www.tiktok.com', cat: 'Social' },
   { id: 'poki', name: 'Poki', mono: 'Po', bg: '#0ea5e9', desc: 'Browser games', url: 'https://poki.com', cat: 'Games' },
   { id: 'crazygames', name: 'CrazyGames', mono: 'CG', bg: '#9333ea', desc: 'Browser games', url: 'https://www.crazygames.com', cat: 'Games' },
   { id: 'coolmath', name: 'Coolmath Games', mono: 'CM', bg: '#0284c7', desc: 'Puzzle and logic games', url: 'https://www.coolmathgames.com', cat: 'Games' },
-  { id: 'scratch', name: 'Scratch', mono: 'Sc', bg: '#f59e0b', desc: 'Make games and animations', url: 'https://scratch.mit.edu', cat: 'Create' },
-  { id: 'github', name: 'GitHub', mono: 'GH', bg: '#27272a', desc: 'Code hosting', url: 'https://github.com', cat: 'Create' },
-  { id: 'vscode', name: 'VS Code', mono: 'VS', bg: '#0078d4', desc: 'Code editor', url: 'https://vscode.dev', cat: 'Create' },
-  { id: 'photopea', name: 'Photopea', mono: 'Pp', bg: '#0d9488', desc: 'Photo editor', url: 'https://www.photopea.com', cat: 'Create' },
-  { id: 'wikipedia', name: 'Wikipedia', mono: 'W', bg: '#3f3f46', desc: 'Encyclopedia', url: 'https://en.wikipedia.org', cat: 'Tools' },
-  { id: 'gtranslate', name: 'Translate', mono: 'Tr', bg: '#2563eb', desc: 'Translate text', url: 'https://translate.google.com', cat: 'Tools' },
+  { id: 'scratch', img: 'scratch', name: 'Scratch', mono: 'Sc', bg: '#f59e0b', desc: 'Make games and animations', url: 'https://scratch.mit.edu', cat: 'Create' },
+  { id: 'github', img: 'github-desktop', name: 'GitHub', mono: 'GH', bg: '#27272a', desc: 'Code hosting', url: 'https://github.com', cat: 'Create' },
+  { id: 'vscode', img: 'visual-studio-code', name: 'VS Code', mono: 'VS', bg: '#0078d4', desc: 'Code editor', url: 'https://vscode.dev', cat: 'Create' },
+  { id: 'photopea', img: 'gimp', name: 'Photopea', mono: 'Pp', bg: '#0d9488', desc: 'Photo editor', url: 'https://www.photopea.com', cat: 'Create' },
+  { id: 'wikipedia', img: 'wikipedia', name: 'Wikipedia', mono: 'W', bg: '#3f3f46', desc: 'Encyclopedia', url: 'https://en.wikipedia.org', cat: 'Tools' },
+  { id: 'gtranslate', img: 'google-translate', name: 'Translate', mono: 'Tr', bg: '#2563eb', desc: 'Translate text', url: 'https://translate.google.com', cat: 'Tools' },
 ];
-const storeApp = s => ({ name: s.name, icon: { mono: s.mono, bg: s.bg }, cat: 'Installed', w: 1000, h: 680, run: (b, w) => BrowserApp(b, w, { url: s.url, single: true, title: s.name }) });
+const storeApp = s => ({ name: s.name, icon: s.img ? realIcon(s.img) : { mono: s.mono, bg: s.bg }, cat: 'Installed', w: 1000, h: 680, run: (b, w) => BrowserApp(b, w, { url: s.url, single: true, title: s.name }) });
