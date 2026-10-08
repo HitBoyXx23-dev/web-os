@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NovaOS</title>
+<link rel="stylesheet" href="css/os.css">
+</head>
+<body>
+<!-- Boot screen -->
+<div id="boot">
+  <div class="boot-logo">◆ NovaOS</div>
+  <pre id="boot-log"></pre>
+  <div class="boot-bar"><div id="boot-progress"></div></div>
+</div>
+
+<!-- Login screen -->
+<div id="login" class="hidden">
+  <div class="login-card">
+    <div class="avatar">👤</div>
+    <input id="login-name" placeholder="Your name" maxlength="20">
+    <button id="login-btn">Sign in →</button>
+  </div>
+  <div id="login-clock"></div>
+</div>
+
+<!-- Desktop -->
+<div id="desktop" class="hidden">
+  <div id="icons"></div>
+  <div id="windows"></div>
+  <div id="start-menu" class="hidden">
+    <input id="start-search" placeholder="Search apps &amp; games…">
+    <div id="start-list"></div>
+    <div class="start-footer">
+      <span id="start-user"></span>
+      <span><button data-power="lock">🔒 Lock</button><button data-power="restart">⟳ Restart</button><button data-power="shutdown">⏻ Shut down</button></span>
+    </div>
+  </div>
+  <div id="ctx-menu" class="hidden"></div>
+  <div id="taskbar">
+    <button id="start-btn">◆</button>
+    <div id="task-items"></div>
+    <div id="tray"><span id="clock"></span></div>
+  </div>
+</div>
+
+<div id="off" class="hidden"><p>It's now safe to close this tab.</p><button onclick="location.reload()">Power on</button></div>
+
+<script src="js/fs.js"></script>
+<script src="js/wm.js"></script>
+<script src="js/games.js"></script>
+<script src="js/apps.js"></script>
+<script src="js/os.js"></script>
+</body>
+</html>
