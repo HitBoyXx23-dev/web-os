@@ -112,14 +112,46 @@ const APPS = {
     });
   } },
 
-  browser: { name: 'Browser', icon: '🌐', cat: 'Apps', w: 900, h: 600, run(body) {
-    body.innerHTML = `<div class="fill"><div class="toolbar"><button class="b">←</button><input class="u grow" value="https://en.wikipedia.org/wiki/Main_Page"><button class="g">Go</button></div>
-      <div class="grow">${frame('https://en.wikipedia.org/wiki/Main_Page')}</div>
-      <div style="font-size:11px;color:var(--muted);padding:2px 6px">Some sites refuse to load inside frames — that's their choice, not a bug.</div></div>`;
-    const u = body.querySelector('.u'), f = body.querySelector('iframe');
-    const go = () => { let v = u.value.trim(); if (!/^https?:\/\//.test(v)) v = v.includes('.') && !v.includes(' ') ? 'https://' + v : 'https://duckduckgo.com/html/?q=' + encodeURIComponent(v); u.value = v; f.src = v; };
-    body.querySelector('.g').onclick = go; u.onkeydown = e => e.key === 'Enter' && go();
-    body.querySelector('.b').onclick = () => { try { f.contentWindow.history.back(); } catch (e) {} };
+  browser: { name: 'Browser', icon: '🌐', cat: 'Apps', w: 1000, h: 680, run: (body, win, url) => BrowserApp(body, win, { url }) },
+
+  store: { name: 'App Store', icon: '🛍️', cat: 'System', w: 720, h: 520, run(body) {
+    const draw = () => {
+      const inst = OS.cfg.installed || [], cats = [...new Set(STORE.map(s => s.cat))];
+      body.innerHTML = `<div class="pad"><h3 style="margin:0">🛍️ App Store</h3><p style="color:var(--muted);margin:4px 0 0">Install web apps to your desktop. They open through the proxy browser.</p></div>` +
+        cats.map(c => `<div class="pad" style="padding-bottom:0"><b>${c}</b></div><div class="grid-cards">${STORE.filter(s => s.cat === c).map(s => `<div class="card" data-id="${s.id}" style="cursor:default"><div class="em">${s.icon}</div>${s.name}<br><br>
+          ${inst.includes(s.id) ? `<button data-open="${s.id}">Open</button> <button data-rm="${s.id}">✕</button>` : `<button data-add="${s.id}">Get</button>`}</div>`).join('')}</div>`).join('');
+    };
+    body.onclick = e => {
+      const d = e.target.dataset, inst = OS.cfg.installed || [];
+      if (d.add) { OS.set({ installed: [...inst, d.add] }); OS.syncApps(); OS.toast('Installed ' + STORE.find(s => s.id === d.add).name); draw(); }
+      if (d.rm) { OS.set({ installed: inst.filter(i => i !== d.rm) }); OS.syncApps(); draw(); }
+      if (d.open) OS.launch('web:' + d.open);
+    };
+    draw();
+  } },
+
+  media: { name: 'Media Player', icon: '🎬', cat: 'Apps', w: 720, h: 480, run(body, win) {
+    body.innerHTML = `<div class="fill"><div class="toolbar"><label><button onclick="this.nextElementSibling.click()">📂 Open files</button><input type="file" accept="audio/*,video/*" multiple hidden></label>
+      <input class="mu grow" placeholder="…or paste a direct .mp4/.mp3 URL"><button class="mg">Play</button></div>
+      <div class="grow row" style="align-items:stretch;flex-wrap:nowrap"><video controls style="flex:1;min-width:0;background:#000"></video><ol class="pl files" style="width:200px;margin:0;overflow:auto;padding:6px 6px 6px 26px"></ol></div></div>`;
+    const v = body.querySelector('video'), pl = body.querySelector('.pl'); let list = [], idx = 0, urls = [];
+    const play = i => { idx = i; v.src = list[i].src; v.play().catch(() => {}); [...pl.children].forEach((li, j) => li.style.color = j === i ? 'var(--accent)' : ''); };
+    const render = () => { pl.innerHTML = list.map((m, i) => `<li data-i="${i}">${esc(m.name)}</li>`).join(''); };
+    body.querySelector('input[type=file]').onchange = e => { for (const f of e.target.files) { const src = URL.createObjectURL(f); urls.push(src); list.push({ name: f.name, src }); } render(); play(list.length - e.target.files.length); };
+    body.querySelector('.mg').onclick = () => { const u = body.querySelector('.mu').value.trim(); if (u) { list.push({ name: u.split('/').pop(), src: u }); render(); play(list.length - 1); } };
+    pl.onclick = e => { const li = e.target.closest('li'); if (li) play(+li.dataset.i); };
+    v.onended = () => idx + 1 < list.length && play(idx + 1);
+    win.cleanup.push(() => urls.forEach(URL.revokeObjectURL));
+  } },
+
+  taskmgr: { name: 'Task Manager', icon: '📊', cat: 'System', w: 420, h: 360, run(body, win) {
+    const draw = () => {
+      const mem = performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(1) + ' MB' : 'n/a';
+      body.innerHTML = `<div class="pad"><p>Memory (JS heap): <b>${mem}</b> · Windows: <b>${WM.wins.size}</b></p><ul class="files" style="padding:0">${[...WM.wins.values()].filter(w => w !== win).map(w =>
+        `<li>${w.icon} ${esc(w.title)} <button data-k="${w.id}" style="float:right;padding:0 8px">End task</button></li>`).join('')}</ul></div>`;
+    };
+    body.onclick = e => { if (e.target.dataset.k) { WM.close(e.target.dataset.k); draw(); } };
+    draw(); loop(win, draw, 2000);
   } },
 
   paint: { name: 'Paint', icon: '🎨', cat: 'Apps', w: 700, h: 520, run(body) {
@@ -136,16 +168,27 @@ const APPS = {
     body.querySelector('.s').onclick = () => { const n = prompt('Name', 'drawing'); if (n) { FS.write('/Pictures/' + n + '.png.txt', cv.toDataURL()); OS.toast('Saved to /Pictures'); } };
   } },
 
-  settings: { name: 'Settings', icon: '⚙️', cat: 'System', w: 460, h: 380, run(body) {
+  settings: { name: 'Settings', icon: '⚙️', cat: 'System', w: 520, h: 560, run(body) {
     const walls = { Aurora: 'radial-gradient(circle at 20% 20%,#3a2b8f,transparent 50%),radial-gradient(circle at 80% 70%,#0e6b8a,transparent 50%),#0b0f1a',
       Sunset: 'linear-gradient(160deg,#ff7e5f,#6a3093)', Forest: 'linear-gradient(160deg,#134e5e,#71b280)', Midnight: '#0b0f1a', Classic: '#008080' };
     body.innerHTML = `<div class="pad"><h3>Personalize</h3><p>Wallpaper</p><div class="row w">${Object.keys(walls).map(k => `<button style="background:${walls[k]};width:70px;height:46px" title="${k}"></button>`).join('')}</div>
       <p>Or image URL</p><div class="row"><input class="iu grow" placeholder="https://…jpg"><button class="ib">Set</button></div>
       <p>Accent color</p><input type="color" class="ac" value="${OS.cfg.accent || '#4f8cff'}">
+      <h3>Proxy</h3><p style="color:var(--muted);font-size:13px">Wisp server used by the proxy browser. Leave blank to use this site's own server (<code>npm start</code>).</p>
+      <div class="row"><input class="ws grow" placeholder="wss://example.com/wisp/" value="${esc(OS.cfg.wisp || '')}"><button class="wb">Save</button></div>
+      <h3>Privacy</h3><p>Tab disguise</p><div class="row"><select class="ck">${Object.keys(CLOAKS).map(k => `<option ${OS.cfg.cloak === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
+      <button class="blank">Open NovaOS in about:blank</button></div>
+      <p>Panic key (instantly leaves to a safe page)</p><div class="row"><input class="pk" style="width:80px" placeholder="key" value="${esc(OS.cfg.panicKey || '')}">
+      <input class="pu grow" placeholder="https://classroom.google.com" value="${esc(OS.cfg.panicUrl || '')}"><button class="pb">Save</button></div>
       <h3>System</h3><button class="rs">Reset NovaOS (erase files &amp; settings)</button></div>`;
     body.querySelectorAll('.w button').forEach(b => b.onclick = () => OS.set({ wall: walls[b.title] }));
     body.querySelector('.ib').onclick = () => { const u = body.querySelector('.iu').value.trim(); if (u) OS.set({ wall: `url("${u.replace(/"/g, '')}") center/cover` }); };
     body.querySelector('.ac').oninput = e => OS.set({ accent: e.target.value });
+    body.querySelector('.wb').onclick = async () => { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await Proxy.ready(); await Proxy.setTransport(); OS.toast('Proxy server updated'); } catch (e) { OS.toast(e.message); } };
+    body.querySelector('.ck').onchange = e => OS.set({ cloak: e.target.value });
+    body.querySelector('.blank').onclick = () => OS.openBlank(location.href);
+    body.querySelector('.pk').onkeydown = e => { e.preventDefault(); if (e.key.length === 1 || /^F\d+$|Escape|Backquote/.test(e.key)) e.target.value = e.key; };
+    body.querySelector('.pb').onclick = () => { OS.set({ panicKey: body.querySelector('.pk').value, panicUrl: body.querySelector('.pu').value.trim() }); OS.toast('Panic key saved'); };
     body.querySelector('.rs').onclick = () => { if (confirm('Erase everything?')) { Object.keys(localStorage).filter(k => k.startsWith('novaos.')).forEach(k => localStorage.removeItem(k)); location.reload(); } };
   } },
 
@@ -163,3 +206,12 @@ const GAME_APPS = {
   flappy: { name: 'Flappy Square', icon: '🐤', cat: 'Games', w: 400, h: 600, run: GAMES.flappy },
 };
 const ALL_APPS = { ...APPS, ...GAME_APPS };
+
+// Tab disguises: page title + favicon.
+const CLOAKS = {
+  None: null,
+  'Google Classroom': { title: 'Home', icon: 'https://ssl.gstatic.com/classroom/favicon.png' },
+  'Google Docs': { title: 'Untitled document - Google Docs', icon: 'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico' },
+  'Google Drive': { title: 'My Drive - Google Drive', icon: 'https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png' },
+  Google: { title: 'Google', icon: 'https://www.google.com/favicon.ico' },
+};

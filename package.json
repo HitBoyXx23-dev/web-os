@@ -1,0 +1,18 @@
+{
+  "name": "novaos",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "NovaOS — a web OS with games, apps, a proxy browser and a Virtual PC",
+  "scripts": {
+    "start": "node server.js",
+    "vendor": "node scripts/vendor.js"
+  },
+  "dependencies": {
+    "@mercuryworkshop/bare-mux": "^2.1.9",
+    "@mercuryworkshop/epoxy-transport": "^2.1.28",
+    "@mercuryworkshop/wisp-js": "^0.3.3",
+    "@titaniumnetwork-dev/ultraviolet": "^3.2.10",
+    "express": "^5.2.1"
+  }
+}

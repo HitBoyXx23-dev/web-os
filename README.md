@@ -1,12 +1,23 @@
 # NovaOS — a web OS
 
-A desktop operating system that runs entirely in the browser: boot screen, login, draggable/resizable windows, taskbar, start menu with search, right-click menu, and a persistent file system.
+A desktop operating system that runs in the browser: boot screen, login, draggable/resizable windows, taskbar, start menu with search, right-click menu, and a persistent file system.
 
-**Open `index.html`** (or serve the folder: `python3 -m http.server`). Deploys as-is to GitHub Pages.
+## Run it
+```bash
+npm install
+npm start          # http://localhost:8080
+```
+`npm start` serves the OS **and** a Wisp server, so the proxy browser works with no extra setup.
+Deploy anywhere that runs Node (Render, Railway, Fly.io, a VPS, Replit…) — it listens on `$PORT`.
+
+Static hosting (GitHub Pages) also works for everything except the proxy's backend: set an external Wisp server in **Settings → Proxy**.
 
 ## What's inside
-- **Virtual PC** — boots real operating systems (Windows 98/95/ME/2000/3.0/1.01, ReactOS, FreeDOS, Linux, KolibriOS) in an emulated x86 PC via the open-source [v86](https://github.com/copy/v86) emulator.
-- **Game Hub** — offline games (Snake, 2048, Minesweeper, Tic-Tac-Toe vs. minimax CPU, Breakout, Flappy Square) plus embedded web games; add your own by URL.
-- **Apps** — Files, Notepad, Terminal (`help` for commands), Browser, Paint, Calculator, Settings (wallpaper, accent color).
+- **Proxy browser** — tabbed browser powered by [Ultraviolet](https://github.com/titaniumnetwork-dev/Ultraviolet) + bare-mux + epoxy over [Wisp](https://github.com/MercuryWorkshop/wisp-js). Bookmarks, history, new-tab page, proxy/direct toggle, open-in-about:blank.
+- **App Store** — install YouTube, Discord, Spotify, Poki, Scratch, VS Code and more to your desktop; they open through the proxy.
+- **Virtual PC** — boots real Windows 98/95/ME/2000/3.0/1.01, ReactOS, FreeDOS, Linux and KolibriOS via the [v86](https://github.com/copy/v86) emulator.
+- **Game Hub** — offline games (Snake, 2048, Minesweeper, Tic-Tac-Toe, Breakout, Flappy Square), web games, and add-your-own by URL.
+- **Apps** — Files, Notepad, Terminal, Paint, Calculator, Media Player, Task Manager, Settings.
+- **Privacy** — tab disguise (title + icon), about:blank launcher, panic key.
 
-Files, settings, high scores and custom games are stored in `localStorage`.
+The proxy client files in `uv/`, `baremux/` and `epoxy/` are copied from `node_modules` by `npm run vendor` (re-run after upgrading those packages). `uv/uv.config.js` and `uv/sw.js` are NovaOS's own.

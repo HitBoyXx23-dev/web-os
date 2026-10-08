@@ -70,3 +70,20 @@ canvas{display:block;margin:auto;max-width:100%}
 .ttt button{height:80px;font-size:36px}
 .files li{list-style:none;padding:6px;border-radius:4px;cursor:pointer}.files li:hover{background:rgba(255,255,255,.08)}
 .files ul{margin:0;padding:6px}
+/* browser */
+.browser .tabs{display:flex;align-items:flex-end;gap:2px;padding:4px 4px 0;background:rgba(0,0,0,.25)}
+.browser .tablist{display:flex;gap:2px;overflow-x:auto;min-width:0}
+.browser .tab{display:flex;align-items:center;gap:6px;padding:6px 8px 6px 12px;border-radius:8px 8px 0 0;background:rgba(255,255,255,.05);font-size:12px;width:170px;flex-shrink:0;cursor:default}
+.browser .tab span{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.browser .tab b{font-weight:400;padding:0 4px;border-radius:4px}.browser .tab b:hover{background:rgba(255,255,255,.2)}
+.browser .tab.on{background:#161b28}
+.browser .newtab{border:0;background:none;padding:4px 10px}
+.bmbar{display:flex;gap:4px;padding:3px 6px;border-bottom:1px solid var(--border);overflow-x:auto}
+.bmbar button{font-size:12px;padding:2px 8px;white-space:nowrap}
+.pages{position:relative}.page{position:absolute;inset:0;overflow:auto}
+.page iframe{border:0;width:100%;height:100%;display:block;background:#fff}
+.newtab-page{display:flex;flex-direction:column;align-items:center;padding:40px 16px;gap:16px}
+.nt-logo{font-size:34px;font-weight:700;color:var(--accent)}
+.nt-q{width:min(560px,100%);padding:12px 16px;border-radius:24px;font-size:16px}
+.newtab-page .grid-cards{width:min(640px,100%)}
+.nt-status{color:var(--muted);font-size:12px}
