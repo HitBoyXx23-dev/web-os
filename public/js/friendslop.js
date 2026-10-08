@@ -352,8 +352,17 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       <div class="ss-colors">${SS_COLORS.map((c, i) => `<button data-color="${i}" style="background:${c}" class="${me.color === c ? 'on' : ''}"></button>`).join('')}</div>
       <div class="row"><input class="ss-code grow" maxlength="8" placeholder="Room code"><button data-a="join">Join</button></div>
       <div class="row"><button class="primary grow" data-a="create">Create a room</button><button class="grow" data-a="solo">Play solo</button></div>
-      ${note ? `<p class="ss-note">${esc(note)}</p>` : ''}</div>`;
+      <label class="row small"><input type="checkbox" class="switch ss-public" checked> List my room publicly</label>
+      ${note ? `<p class="ss-note">${esc(note)}</p>` : ''}
+      <div class="section-label" style="padding:4px 0 0">Open rooms</div><div class="ss-rooms"><div class="spinner"></div></div></div>`;
+    Party.rooms('game').then(list => {
+      const box = ui.querySelector('.ss-rooms'); if (!box) return;
+      if (list === null) { box.innerHTML = '<p class="muted small">Online play needs the HitBoy server (see Settings → Proxy → Live server).</p>'; return; }
+      const rooms = list.filter(r => r.kind === 'scrapshift');
+      box.innerHTML = rooms.length ? rooms.map(r => `<button class="dd-room" data-room="${esc(r.room)}"><b>${esc(r.title)}</b><small>${r.people}/${r.max} · ${esc(r.state || '')}</small></button>`).join('') : '<p class="muted small">No open rooms — create one!</p>';
+    });
   };
+  const announce = state => { if (conn && isHost()) send({ t: 'meta', meta: { title: `${me.name}'s Scrap Shift`, kind: 'scrapshift', name: me.name, public: !!conn.pub, state } }); };
   const room = code => {
     ui.innerHTML = `<div class="ss-lobby"><h2>Room ${esc(code.toUpperCase())}</h2><p class="muted">Share the room code with friends. Up to 8 players.</p><div class="ss-players"></div>
       <div class="row ss-start"></div><button class="ghost" data-a="back">Leave</button></div>`;
@@ -365,24 +374,25 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     ui.querySelector('.ss-start').innerHTML = isHost() ? '<button class="primary grow" data-a="start">Start shift</button>' : '<p class="muted">Waiting for the host to start…</p>';
   };
   const begin = () => { ui.innerHTML = ''; body.focus(); };
-  const connect = code => {
+  const connect = (code, pub) => {
     solo = false; peers.clear();
     conn = Party.connect('game', 'ss-' + code.toLowerCase(), me.name, {
-      welcome: m => { myId = m.id; m.peers.forEach(p => peers.set(p.id, { id: p.id, name: p.name })); pickHost(); room(code); send({ t: 'p', x: 0, y: 0, a: 0, fl: true, dead: false, e: 0, c: me.color, n: me.name }); },
+      welcome: m => { myId = m.id; conn.pub = pub; m.peers.forEach(p => peers.set(p.id, { id: p.id, name: p.name })); pickHost(); room(code); announce('waiting'); send({ t: 'p', x: 0, y: 0, a: 0, fl: true, dead: false, e: 0, c: me.color, n: me.name }); },
       join: p => { peers.set(p.id, { id: p.id, name: p.name }); pickHost(); drawRoom(); say(`${p.name} joined`); },
-      leave: id => { const p = peers.get(id); peers.delete(id); pickHost(); drawRoom(); if (p) say(`${p.name} left`); },
+      leave: id => { const p = peers.get(id); peers.delete(id); pickHost(); drawRoom(); if (p) say(`${p.name} left`); announce(W ? 'playing' : 'waiting'); },
       message: m => { if (m.t === 'w' && ui.querySelector('.ss-lobby')) begin(); onMsg(m); drawRoom(); },
       close: reason => { conn = null; solo = true; myId = hostId = 1; peers.clear(); W = null; lobby(reason); },
     });
   };
   ui.onclick = e => {
     const c = e.target.closest('[data-color]'); if (c) { me.color = SS_COLORS[+c.dataset.color]; localStorage.setItem('novaos.ssColor', c.dataset.color); ui.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('on', b === c)); return; }
+    const rm = e.target.closest('[data-room]'); if (rm) return connect(rm.dataset.room.replace(/^ss-/, ''));
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
     const nm = ui.querySelector('.ss-name'); if (nm) me.name = nm.value.trim().slice(0, 16) || me.name;
     if (a === 'solo') { solo = true; myId = hostId = 1; newShift(1, 150); begin(); }
-    if (a === 'create') connect(Math.random().toString(36).slice(2, 6));
+    if (a === 'create') connect(Math.random().toString(36).slice(2, 6), ui.querySelector('.ss-public').checked);
     if (a === 'join') { const code = ui.querySelector('.ss-code').value.trim(); if (code) connect(code); }
-    if (a === 'start') { newShift(1, 150); begin(); }
+    if (a === 'start') { newShift(1, 150); begin(); announce('playing'); }
     if (a === 'back') { conn?.close(); conn = null; peers.clear(); myId = hostId = 1; lobby(); }
   };
   win.game = { me, world: () => W }; // for tests and the curious

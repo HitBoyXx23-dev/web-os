@@ -88,6 +88,7 @@ const OS = {
   },
 
   enterDesktop(unlocking) {
+    if (/[#&]live=/.test(location.hash)) setTimeout(() => this.launch('live'), 300); // shared stream link
     if (this.pendingRelay) {
       const r = this.pendingRelay; this.pendingRelay = null;
       setTimeout(async () => {

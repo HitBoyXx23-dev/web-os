@@ -7,6 +7,11 @@ const Party = {
     const base = custom || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE.replace(/\/$/, '');
     return `${base}/party/?app=${app}&room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
   },
+  // Public rooms (live streams, open game rooms) on the party server: [{ room, people, max, title, kind, name, started, state }]
+  async rooms(app) {
+    const base = this.url(app, 'x', 'x').replace(/^ws/, 'http').replace(/\/party\/\?.*$/, '');
+    try { const r = await fetch(`${base}/party/rooms?app=${app}`, { cache: 'no-store' }); return r.ok ? await r.json() : []; } catch (e) { return null; }
+  },
   // Opens a room. on: { welcome, join, leave, message(m), close(reason) }
   connect(app, room, name, on) {
     const ws = new WebSocket(this.url(app, room, name)); let opened = false;

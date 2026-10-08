@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { server as wisp } from '@mercuryworkshop/wisp-js/server';
-import { handleParty } from './party.js';
+import { handleParty, listRooms } from './party.js';
 
 const app = express();
 // Ubuntu 24.04 (container2wasm) needs SharedArrayBuffer, i.e. a cross-origin isolated page.
@@ -15,6 +15,8 @@ app.use('/vm/ubuntu24', (req, res, next) => {
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   next();
 });
+// Public streams and game rooms (for the Live app and game lobbies).
+app.get('/party/rooms', (req, res) => { res.set({ 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.json(listRooms(String(req.query.app || ''))); });
 app.use(express.static(fileURLToPath(new URL('./public', import.meta.url)), { extensions: ['html'] }));
 
 const server = createServer(app);
