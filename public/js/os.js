@@ -149,7 +149,9 @@ const OS = {
     $('#icons').oncontextmenu = e => {
       e.preventDefault(); this.closeFlyouts();
       const i = e.target.closest('.icon');
-      const items = i ? [['open', 'Open', () => this.launch(i.dataset.id)], ['star', 'Pin to Dock', () => { this.set({ dock: [...new Set([...this.dock(), i.dataset.id])] }); this.renderDock(); }]] : [
+      const items = i ? [['open', 'Open', () => this.launch(i.dataset.id)], ['star', 'Pin to Dock', () => { this.set({ dock: [...new Set([...this.dock(), i.dataset.id])] }); this.renderDock(); Shell.renderTaskbar(); }],
+        '-', ['trash', 'Remove from Desktop', () => this.removeFromDesktop(i.dataset.id)]] : [
+        ['grid', 'Arrange Icons', () => { this.set({ iconPos: {} }); this.renderIcons(); }],
         ['notepad', 'New Document', () => this.launch('notepad')], ['terminal', 'Open in Terminal', () => this.launch('terminal')], '-',
         ['grid', 'Show Applications', () => this.openLauncher()], ['taskmgr', 'System Monitor', () => this.launch('taskmgr')], '-',
         ['paint', 'Change Background…', () => this.launch('settings', 'appearance')], ['settings', 'Settings', () => this.launch('settings')]];
@@ -302,7 +304,10 @@ const OS = {
   },
 };
 
-OS.load(); OS.syncApps(); OS.initDesktop();
+OS.load();
+// HitBoy's own sites come installed (once, so uninstalling them sticks).
+if (!OS.cfg.hitboySites) OS.set({ installed: [...new Set([...(OS.cfg.installed || []), ...HITBOY_SITES.map(x => x.id)])], hitboySites: 1 });
+OS.syncApps(); OS.initDesktop();
 FS.ready.then(() => Boot.start());
 // Register the service worker right away so HitBoy Web-OS works offline and can be installed as an app.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(() => {});

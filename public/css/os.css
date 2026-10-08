@@ -571,3 +571,24 @@ canvas { display: block; max-width: 100%; }
 #tty .tty-line { display: flex; white-space: pre; }
 #tty input { flex: 1; background: none; border: 0; outline: 0; padding: 0; color: inherit; font: inherit; border-radius: 0; box-shadow: none; caret-color: #d0d0d0; }
 #tty input[type=password] { color: transparent; }
+.mv-sites { display: flex; gap: 10px; padding: 0 20px 6px; flex-wrap: wrap; }
+.mv-site { display: flex; align-items: center; gap: 12px; padding: 10px 16px 10px 10px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text); text-align: left; }
+.mv-site:hover { border-color: var(--line-2); }
+.mv-site span { display: flex; flex-direction: column; }
+.mv-site b { font-weight: 600; font-size: 13px; }
+.mv-site small { color: var(--text-3); font-size: 12px; }
+
+/* Moving apps (arrange.js) */
+#icons { display: block !important; padding: 0 !important; }
+#icons .icon { position: absolute; }
+#icons .icon.drag-src { visibility: hidden; }
+#dock .drag-src, #taskbar .drag-src { display: none !important; }
+.drag-ghost { position: fixed; z-index: 100000; pointer-events: none; opacity: .92; transition: none; }
+.drag-ghost.icon { background: rgba(255, 255, 255, .14); border-color: rgba(255, 255, 255, .2); }
+.drag-tile { width: 56px; height: 56px; display: grid; place-items: center; filter: drop-shadow(0 8px 18px rgba(0, 0, 0, .45)); }
+.icon-ph { position: absolute; width: 84px; height: 92px; border: 2px dashed rgba(255, 255, 255, .35); border-radius: 10px; pointer-events: none; }
+:root[data-theme=light] .icon-ph { border-color: rgba(0, 0, 0, .25); }
+.bar-ph { flex: none; width: 54px; height: 56px; border-radius: 12px; background: var(--press); outline: 2px dashed var(--line-2); outline-offset: -4px; }
+#taskbar .bar-ph { width: 44px; height: 40px; border-radius: 6px; }
+#dock[data-kind=dock-left] .bar-ph { width: 54px; height: 56px; }
+body.dragging-app, body.dragging-app * { user-select: none; cursor: grabbing !important; }

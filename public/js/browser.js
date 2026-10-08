@@ -214,5 +214,5 @@ const STORE = [
   { id: 'wikipedia', img: 'wikipedia', name: 'Wikipedia', mono: 'W', bg: '#3f3f46', desc: 'Encyclopedia', url: 'https://en.wikipedia.org', cat: 'Tools' },
   { id: 'gtranslate', img: 'google-translate', name: 'Translate', mono: 'Tr', bg: '#2563eb', desc: 'Translate text', url: 'https://translate.google.com', cat: 'Tools' },
 ];
-const storeIcon = s => s.img ? realIcon(s.img) : s.fav ? favIcon(s.url) : { mono: s.mono, bg: s.bg };
+const storeIcon = s => s.icon || (s.img ? realIcon(s.img) : s.fav ? favIcon(s.url) : { mono: s.mono, bg: s.bg });
 const storeApp = s => ({ name: s.name, icon: storeIcon(s), cat: 'Installed', w: 1000, h: 680, run: (b, w) => BrowserApp(b, w, { url: s.url, single: true, title: s.name }) });

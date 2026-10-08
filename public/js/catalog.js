@@ -47,6 +47,14 @@ const GAME_CATS = ['Multiplayer', 'Action', 'Racing', 'Sports', 'Puzzle', 'Arcad
 // Opens a site through the proxy browser in app mode (most game sites refuse to load in a plain frame).
 const openWeb = (name, url, icon) => WM.open({ title: name, icon: icon || favIcon(url), w: 1100, h: 720, content: (b, w) => BrowserApp(b, w, { url, single: true, title: name }) });
 
+// HitBoy's own sites: installed for everyone (see OS.load in os.js) and shown at the top of Movies.
+const HITBOY_SITES = [
+  { id: 'hitboyflix', name: 'HitBoyFlix', icon: { img: 'icons/sites/hitboyflix.png' }, desc: 'Movies and TV', url: 'https://hitboyflix.vercel.app/', cat: 'HitBoy' },
+  { id: 'hitboystream', name: 'HitBoyStream', icon: { img: 'icons/sites/hitboystream.png' }, desc: 'Shows, movies and live streams', url: 'https://hitboystream.vercel.app/', cat: 'HitBoy' },
+  { id: 'navianime', name: 'NaviAnime', icon: { img: 'icons/sites/navianime.svg' }, desc: 'Anime, sub and dub', url: 'https://navianime.vercel.app/', cat: 'HitBoy' },
+];
+STORE.unshift(...HITBOY_SITES);
+
 // More App Store entries (opened through the proxy as well).
 STORE.push(
   { id: 'sculptgl', name: 'SculptGL', fav: 1, desc: '3D sculpting (Blender-style)', url: 'https://stephaneginier.com/sculptgl/', cat: 'Create' },
@@ -116,7 +124,7 @@ const MOVIE_ROWS = [
 const MOVIE_FILTER = ' AND mediatype:movies AND NOT subject:(adult OR erotica OR nudity OR sexploitation OR exploitation)';
 const archiveSearch = async (query, rows = 24, extra = '') => {
   const u = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(query + MOVIE_FILTER + extra)}&fl[]=identifier&fl[]=title&fl[]=year&sort[]=downloads+desc&rows=${rows}&output=json`;
-  return ((await (await fetch(u)).json()).response.docs || []).filter(d => !/sex|nude|strip|burlesque/i.test(d.title || ''));
+  return ((await (await fetch(u)).json()).response.docs || []).filter(d => !/sex|nude|strip|burlesque|concentration camp/i.test(d.title || ''));
 };
 APPS.movies = ALL_APPS.movies = { name: 'Movies', icon: realIcon('kodi'), cat: 'Apps', w: 1000, h: 680, run(body, win) {
   body.innerHTML = `<div class="movies"><div class="mv-head"><h3>Movies</h3><span class="muted small grow">Thousands of public-domain films from the Internet Archive</span>
@@ -124,7 +132,7 @@ APPS.movies = ALL_APPS.movies = { name: 'Movies', icon: realIcon('kodi'), cat: '
   const main = body.querySelector('.mv-body');
   const card = d => `<button class="mv-card" data-id="${esc(d.identifier)}" data-title="${esc(d.title || d.identifier)}"><img loading="lazy" alt="" src="https://archive.org/services/img/${encodeURIComponent(d.identifier)}"><b>${esc(d.title || d.identifier)}</b><small>${d.year || ''}</small></button>`;
   const home = async () => {
-    main.innerHTML = MOVIE_ROWS.map(([name], i) => `<div class="mv-row"><h4>${name}</h4><div class="mv-strip" data-row="${i}"><div class="spinner"></div></div></div>`).join('');
+    main.innerHTML = `<div class="mv-row"><h4>HitBoy</h4><div class="mv-sites">${HITBOY_SITES.map(x => `<button class="mv-site" data-svc="${x.id}">${tile(x.icon, 40)}<span><b>${esc(x.name)}</b><small>${esc(x.desc)}</small></span></button>`).join('')}</div></div>` + MOVIE_ROWS.map(([name], i) => `<div class="mv-row"><h4>${name}</h4><div class="mv-strip" data-row="${i}"><div class="spinner"></div></div></div>`).join('');
     MOVIE_ROWS.forEach(async ([, q], i) => {
       const strip = main.querySelector(`[data-row="${i}"]`);
       try { const docs = await archiveSearch(q, 24, ' AND NOT subject:(documentary OR propaganda OR newsreel)'); if (strip) strip.innerHTML = docs.map(card).join('') || '<span class="muted small">Nothing here right now.</span>'; }
@@ -155,7 +163,7 @@ APPS.movies = ALL_APPS.movies = { name: 'Movies', icon: realIcon('kodi'), cat: '
   const card2 = s => `<div class="card" data-svc="${s.id}">${tile(favIcon(s.url), 40)}<div class="meta"><div class="name">${esc(s.name)}</div><div class="sub">${esc(s.desc)}</div></div></div>`;
   body.onclick = e => {
     const c = e.target.closest('.mv-card'); if (c) return play(c.dataset.id, c.dataset.title);
-    const s = e.target.closest('[data-svc]'); if (s) { const x = STORE.find(t => t.id === s.dataset.svc); return openWeb(x.name, x.url); }
+    const s = e.target.closest('[data-svc]'); if (s) { const x = STORE.find(t => t.id === s.dataset.svc); return openWeb(x.name, x.url, storeIcon(x)); }
     const a = e.target.closest('[data-a]')?.dataset.a;
     if (a === 'home') { WM.setTitle(win, 'Movies'); home(); } if (a === 'free') free();
   };
