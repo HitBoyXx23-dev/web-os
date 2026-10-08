@@ -7,7 +7,7 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v10';
+const CACHE = 'novaos-v11';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
@@ -50,10 +50,40 @@ async function shell(req) {
   }
 }
 
+// Ad and tracker blocking for proxied pages (Settings → Proxy). Conservative list: ad networks and analytics only.
+const AD_HOSTS = new Set(['doubleclick.net', 'googlesyndication.com', 'googleadservices.com', 'google-analytics.com', 'googletagservices.com', 'adservice.google.com',
+  'adnxs.com', 'adsrvr.org', 'advertising.com', 'amazon-adsystem.com', 'criteo.com', 'criteo.net', 'taboola.com', 'outbrain.com', 'pubmatic.com',
+  'rubiconproject.com', 'openx.net', 'casalemedia.com', 'scorecardresearch.com', 'quantserve.com', 'moatads.com', 'adsafeprotected.com', 'doubleverify.com',
+  '2mdn.net', 'adform.net', 'smartadserver.com', 'yieldmo.com', 'sharethrough.com', 'teads.tv', 'media.net', 'bidswitch.net', '3lift.com', 'sovrn.com',
+  'lijit.com', 'indexww.com', 'contextweb.com', 'gumgum.com', 'zedo.com', 'popads.net', 'popcash.net', 'propellerads.com', 'adsterra.com', 'exoclick.com',
+  'juicyads.com', 'hotjar.com', 'clarity.ms', 'bat.bing.com', 'analytics.tiktok.com', 'ads-twitter.com', 'analytics.twitter.com', 'adroll.com', 'chartbeat.com',
+  'ads.yahoo.com', 'adtechus.com', 'serving-sys.com', 'mathtag.com', 'adcolony.com', 'unityads.unity3d.com', 'onesignal.com', 'pushcrew.com']);
+const blockedHost = h => { for (let d = h; d.includes('.'); d = d.slice(d.indexOf('.') + 1)) if (AD_HOSTS.has(d)) return true; return false; };
+const SETTINGS = 'hitboy-settings';
+let adblock = true;
+const settingsReady = caches.open(SETTINGS).then(c => c.match('/__adblock')).then(r => r ? r.text() : '1').then(v => { adblock = v !== '0'; }).catch(() => {});
+self.addEventListener('message', e => {
+  if (e.data?.hitboy !== 'adblock') return;
+  adblock = !!e.data.on; caches.open(SETTINGS).then(c => c.put('/__adblock', new Response(adblock ? '1' : '0'))).catch(() => {});
+});
+// The real address behind a proxied request (Scramjet: /scramjet/<encoded URL>; Ultraviolet: /uv/service/<xor codec>).
+function proxiedTarget(url) {
+  try {
+    if (url.pathname.startsWith(BASE + 'scramjet/')) return new URL(decodeURIComponent(url.pathname.slice(BASE.length + 9)));
+    if (url.pathname.startsWith(__uv$config.prefix)) return new URL(__uv$config.decodeUrl(url.pathname.slice(__uv$config.prefix.length)));
+  } catch (e) {}
+  return null;
+}
+
 self.addEventListener('fetch', event => {
   // Requests to other sites (APIs, CDNs) go straight to the network; proxy routes are always on this origin.
   if (new URL(event.request.url).origin !== location.origin) return;
   event.respondWith((async () => {
+    await settingsReady;
+    if (adblock && event.request.destination !== 'document') {
+      const target = proxiedTarget(new URL(event.request.url));
+      if (target && blockedHost(target.hostname)) return new Response(null, { status: 204 });
+    }
     await scramjet.loadConfig();
     if (scramjet.route(event)) return scramjet.fetch(event);
     if (uv.route(event)) return uv.fetch(event);

@@ -338,6 +338,9 @@ const APPS = {
       if (page === 'proxy') html = `<h3>HitBoy Proxy</h3>
         ${row('Page engine', 'Rewrites sites so they run inside HitBoy Web-OS. HitBoy Proxy uses Scramjet and automatically retries a site with a backup engine if it fails there.', `<div class="seg">${Object.entries(WebProxy.ENGINES).map(([k, n]) => `<button data-engine="${k}" class="${WebProxy.engine() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
         ${row('Connection', 'Encrypted end to end. Automatic uses libcurl.js and switches a site to Epoxy if its connection fails there (for example "SSL connect error"). None turns the proxy off: sites load directly.', `<div class="seg">${[...Object.entries(WebProxy.TRANSPORTS), ['none', 'None']].map(([k, n]) => `<button data-transport="${k}" class="${(c.proxy === false ? 'none' : WebProxy.transport()) === k ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
+        ${row('Block ads and trackers', 'Faster, lighter pages: blocks well-known ad networks and analytics on proxied sites', `<input type="checkbox" class="switch" data-toggle="adblock" ${c.adblock === false ? '' : 'checked'}>`)}
+        ${row('Search engine', 'Used when you type words into the address bar', `<select class="se">${Object.entries(SEARCH_ENGINES).map(([k, [n]]) => `<option value="${k}" ${(c.search || 'duckduckgo') === k ? 'selected' : ''}>${n}</option>`).join('')}</select>`)}
+        ${row('Proxy cookies and site data', 'Signs you out of proxied sites. Fixes sites stuck in a login or "checking your browser" loop.', `<button class="danger pxclear">Clear…</button>`)}
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Wisp server</span><small>Leave blank to pick automatically: this site's own server if it has one (<code>npm start</code>), otherwise a free public server. Sites like YouTube, Reddit and TikTok often block shared public servers — for the best results run your own (see the README: Render, or your own computer at home).</small></div>
         <div class="row"><input class="ws grow" placeholder="Automatic — or several, separated by spaces (first that answers is used)" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Live server</span><small>For Live Chat, streams and multiplayer games. Leave blank to use this site. On Vercel, enter the address of a HitBoy Web-OS server (for example <code>wss://your-app.onrender.com</code>).</small></div>
@@ -385,6 +388,7 @@ const APPS = {
         await Users.setPassword(OS.user, a); OS.account = Users.get(OS.user); OS.toast(a ? 'Password changed' : 'Password removed');
       }
       if (b.classList.contains('ib')) { const u = body.querySelector('.iu').value.trim(); if (u) OS.set({ wall: `url("${u.replace(/["\\]/g, '')}") center/cover` }); }
+      if (b.classList.contains('pxclear')) { if (!confirm('Clear cookies and saved data for all sites you opened through the proxy?')) return; await WebProxy.clearData(); if (confirm('Done. Reload HitBoy Web-OS now to finish?')) location.reload(); return; }
       if (b.classList.contains('pt-run')) { b.disabled = true; b.textContent = 'Testing…'; await proxyTest(body.querySelector('.pt-out')); b.disabled = false; b.textContent = 'Run again'; return; }
       if (b.classList.contains('psb')) { OS.set({ partyServer: body.querySelector('.pss').value.trim() }); OS.toast('Live server saved'); }
       if (b.classList.contains('wb')) { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await WebProxy.ready(); await WebProxy.setTransport(); OS.toast('Proxy server saved'); } catch (err) { OS.toast(err.message); } }
@@ -398,6 +402,8 @@ const APPS = {
       if (e.target.classList.contains('ck')) OS.set({ cloak: e.target.value });
       if (e.target.dataset.part) { Shell.customize({ [e.target.dataset.part]: e.target.value }); draw(); }
       if (e.target.dataset.toggle) { OS.set({ [e.target.dataset.toggle]: e.target.checked }); Shell.apply(); }
+      if (e.target.dataset.toggle === 'adblock') WebProxy.syncAdblock();
+      if (e.target.classList.contains('se')) OS.set({ search: e.target.value });
     };
     body.oninput = e => { if (e.target.dataset.radius !== undefined) { OS.set({ radius: +e.target.value }); Shell.apply(); } };
     draw();

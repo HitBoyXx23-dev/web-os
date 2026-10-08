@@ -48,8 +48,16 @@ const WebProxy = {
       for (const r of await navigator.serviceWorker.getRegistrations()) if (r.scope !== new URL(BASE, location).href) await r.unregister();
       await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE });
       await navigator.serviceWorker.ready;
+      this.syncAdblock();
       await this.setTransport();
     })().catch(e => { this._ready = null; throw e; });
+  },
+  // Tell the service worker whether to block ads and trackers on proxied pages.
+  syncAdblock() { navigator.serviceWorker?.ready.then(r => r.active?.postMessage({ hitboy: 'adblock', on: OS.cfg.adblock !== false })).catch(() => {}); },
+  // Forget proxied sites' cookies and storage (fixes sites stuck in login or bot-check loops).
+  async clearData() {
+    for (const db of ['$scramjet', '__op']) await new Promise(res => { const r = indexedDB.deleteDatabase(db); r.onsuccess = r.onerror = r.onblocked = res; });
+    try { localStorage.removeItem('novaos.pxSites'); } catch (e) {}
   },
   async setTransport() {
     this._auto = await this.pickRelay();
@@ -68,12 +76,14 @@ const WebProxy = {
   },
 };
 
+const SEARCH_ENGINES = { duckduckgo: ['DuckDuckGo', 'https://duckduckgo.com/?q='], google: ['Google', 'https://www.google.com/search?q='], bing: ['Bing', 'https://www.bing.com/search?q='],
+  brave: ['Brave', 'https://search.brave.com/search?q='], startpage: ['Startpage', 'https://www.startpage.com/do/search?q='] };
 // Turn whatever was typed into a URL (or a search).
 function toUrl(v) {
   v = v.trim();
   if (/^https?:\/\//i.test(v)) return v;
   if (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(v)) return 'https://' + v;
-  return 'https://duckduckgo.com/?q=' + encodeURIComponent(v);
+  return (SEARCH_ENGINES[OS.cfg.search] || SEARCH_ENGINES.duckduckgo)[1] + encodeURIComponent(v);
 }
 
 const QUICK_LINKS = [
@@ -107,7 +117,7 @@ function BrowserApp(body, win, opts = {}) {
   const proxyOn = () => OS.cfg.proxy !== false;
   const loading = on => { bar.style.opacity = 1; bar.style.width = on ? '70%' : '100%'; if (!on) setTimeout(() => { bar.style.opacity = 0; bar.style.width = 0; }, 300); };
 
-  const renderPx = () => { const b = $b('.px'); b.innerHTML = glyph('shield', 12) + (proxyOn() ? 'Proxy' : 'Direct'); b.classList.toggle('on', proxyOn()); };
+  const renderPx = () => { const b = $b('.px'), on = proxyOn() && !(cur && cur.direct); b.innerHTML = glyph('shield', 12) + (on ? 'HitBoy Proxy' : 'Direct'); b.classList.toggle('on', on); b.title = 'Proxy options'; };
   const renderBookmarks = () => {
     const bms = OS.cfg.bookmarks || [];
     $b('.bmbar').innerHTML = bms.map((b, i) => `<button data-i="${i}" title="${esc(b.url)}">${esc(b.title.slice(0, 28))}</button>`).join('');
@@ -115,7 +125,7 @@ function BrowserApp(body, win, opts = {}) {
     $b('.bm').classList.toggle('on', !!cur && bms.some(b => b.url === cur.url));
   };
   const renderTabs = () => {
-    $b('.tablist').innerHTML = tabs.map((t, i) => `<div class="tab${t === cur ? ' on' : ''}" data-i="${i}" title="${esc(t.title || 'New Tab')}"><span>${esc(t.title || 'New Tab')}</span><button class="tx" data-x="${i}">${glyph('close', 12)}</button></div>`).join('');
+    $b('.tablist').innerHTML = tabs.map((t, i) => `<div class="tab${t === cur ? ' on' : ''}${t.private ? ' private' : ''}" data-i="${i}" title="${esc(t.title || 'New Tab')}${t.private ? ' (private)' : ''}"><span>${t.private ? '🕶 ' : ''}${esc(t.title || 'New Tab')}</span><button class="tx" data-x="${i}">${glyph('close', 12)}</button></div>`).join('');
     if (cur) WM.setTitle(win, opts.single ? (opts.title || 'Browser') : (cur.title || 'New Tab') + ' — Browser');
   };
   const homeHtml = () => `<div class="newtab-page"><div class="nt-brand"><span style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML.replace('class="mark"', 'class="mark" style="width:30px;height:30px"')}</span>Search</div>
@@ -126,11 +136,12 @@ function BrowserApp(body, win, opts = {}) {
 
   const select = t => {
     cur = t; tabs.forEach(x => x.el.style.display = x === t ? '' : 'none');
-    u.value = t.url || ''; renderTabs(); renderBookmarks();
+    u.value = t.url || ''; renderTabs(); renderBookmarks(); renderPx();
   };
-  const newTab = url => {
+  // priv: a private tab — nothing it visits is saved to history.
+  const newTab = (url, priv) => {
     const el = document.createElement('div'); el.className = 'page'; pages.appendChild(el);
-    const t = { el, url: '', title: 'New Tab', frame: null }; tabs.push(t); select(t);
+    const t = { el, url: '', title: priv ? 'Private Tab' : 'New Tab', frame: null, private: !!priv }; tabs.push(t); select(t);
     url ? navigate(t, url) : home(t);
     return t;
   };
@@ -147,14 +158,16 @@ function BrowserApp(body, win, opts = {}) {
     if (proxyOn()) OS.proxyStatus().then(([ok, m]) => { const s = t.el.querySelector('.nt-status'); if (s) { s.textContent = m; s.previousElementSibling.className = 'dot ' + (ok ? 'ok' : 'bad'); } });
     if (t === cur) { u.value = ''; renderTabs(); renderBookmarks(); setTimeout(() => q.focus()); }
   };
-  const navigate = async (t, url, retry) => {
+  // force: 'scramjet' or 'uv' to pick the engine for this load, or 'direct' to load without the proxy.
+  const navigate = async (t, url, retry, force) => {
     if (!retry) t.retried = false;
+    const direct = force === 'direct' || !proxyOn(); t.direct = direct; if (t === cur) renderPx();
     t.url = url; t.title = hostOf(url); if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); }
     let src = url;
     loading(true);
-    if (proxyOn()) {
+    if (!direct) {
       t.el.innerHTML = '';
-      try { await WebProxy.ready(); t.engine = WebProxy.engineFor(url); src = WebProxy.encode(url, t.engine); }
+      try { await WebProxy.ready(); t.engine = force || WebProxy.engineFor(url); src = WebProxy.encode(url, t.engine); }
       catch (e) {
         loading(false);
         t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
@@ -186,7 +199,7 @@ function BrowserApp(body, win, opts = {}) {
         }
       } catch (e) {}
       if (t === cur) { u.value = t.url; renderBookmarks(); } renderTabs();
-      addHistory(t.url, t.title);
+      if (!t.private) addHistory(t.url, t.title);
     };
   };
   const addHistory = (url, title) => {
@@ -208,7 +221,18 @@ function BrowserApp(body, win, opts = {}) {
     OS.set({ bookmarks: bms }); renderBookmarks();
   };
   $b('.bmbar').onclick = e => { const b = e.target.closest('button'); if (b) navigate(cur, OS.cfg.bookmarks[b.dataset.i].url); };
-  $b('.px').onclick = () => { OS.set({ proxy: !proxyOn() }); renderPx(); if (cur.url) navigate(cur, cur.url); else home(cur); };
+  // Proxy menu: on/off, retry with the other engine, load without the proxy, copy the address, private tab.
+  $b('.px').onclick = e => {
+    const r = e.currentTarget.getBoundingClientRect(), on = proxyOn(), page = cur.url && cur.url.startsWith('http');
+    const other = cur.engine === 'uv' ? 'scramjet' : 'uv';
+    OS.menu($('#ctx-menu'), [
+      ['shield', on ? 'Turn proxy off' : 'Turn proxy on', () => { OS.set({ proxy: !on }); renderPx(); if (cur.url) navigate(cur, cur.url); else home(cur); }],
+      ...(page && on ? [['reload', other === 'uv' ? 'Retry with the backup engine' : 'Retry with Scramjet', () => { WebProxy.setSiteEngine(cur.url, other === 'uv' ? 'uv' : null); navigate(cur, cur.url, true, other); }],
+        ['external', 'Load this page without the proxy', () => navigate(cur, cur.url, false, 'direct')]] : []),
+      ...(page ? [['file', 'Copy page address', () => navigator.clipboard?.writeText(cur.url).then(() => OS.toast('Address copied'))]] : []),
+      '-', ['user', 'New private tab', () => newTab(undefined, true)], ['settings', 'Proxy settings…', () => OS.launch('settings', 'proxy')],
+    ], r.left, r.bottom + 4);
+  };
   $b('.pop').onclick = async () => {
     if (!cur.url) return;
     let url = cur.url;
