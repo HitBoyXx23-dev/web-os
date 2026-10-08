@@ -228,8 +228,8 @@ const APPS = {
         <div class="row"><input class="iu grow" placeholder="Or paste an image URL"><button class="ib">Use image</button></div>`;
       if (page === 'proxy') html = `<h3>Proxy</h3>
         ${row('Use proxy in Browser', 'Routes pages through Ultraviolet so blocked sites can load', `<div class="seg">${['on', 'off'].map(v => `<button data-proxy="${v}" class="${(c.proxy !== false) === (v === 'on') ? 'on' : ''}">${v === 'on' ? 'On' : 'Off'}</button>`).join('')}</div>`)}
-        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Wisp server</span><small>Leave blank to use this site's own server (started with <code>npm start</code>).</small></div>
-        <div class="row"><input class="ws grow" placeholder="${esc(Proxy.wispUrl())}" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
+        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Wisp server</span><small>Leave blank to pick automatically: this site's own server if it has one (<code>npm start</code>), otherwise a public server.</small></div>
+        <div class="row"><input class="ws grow" placeholder="Automatic" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
         <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>`;
       if (page === 'privacy') html = `<h3>Privacy</h3>
         ${row('Tab disguise', 'Changes the browser tab title and icon', `<select class="ck">${Object.keys(CLOAKS).map(k => `<option ${(c.cloak || 'None') === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`)}

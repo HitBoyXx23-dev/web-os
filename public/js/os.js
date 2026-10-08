@@ -199,7 +199,7 @@ const OS = {
   },
   async proxyStatus() {
     if (this.cfg.proxy === false) return [false, 'Proxy off — sites load directly'];
-    try { await Proxy.ready(); return [true, 'Proxy connected']; } catch (e) { return [false, e.message]; }
+    try { await Proxy.ready(); return [true, 'Proxy connected via ' + new URL(Proxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
   },
 
   power(kind) {

@@ -7,10 +7,12 @@ A desktop operating system that runs in the browser: login screen, windows you c
 npm install
 npm start          # http://localhost:8080
 ```
-`npm start` serves the OS **and** a Wisp server, so the proxy browser works with no extra setup.
-Deploy anywhere that runs Node (Render, Railway, Fly.io, a VPS, Replit…) — it listens on `$PORT`.
+`npm start` serves `public/` **and** a Wisp server, so the proxy browser uses your own server.
 
-Static hosting (GitHub Pages) also works for everything except the proxy's backend: set an external Wisp server in **Settings → Proxy**.
+## Deploy
+- **Vercel** — import the repo and deploy; `vercel.json` serves `public/` as a static site. Vercel can't host WebSockets, so the proxy automatically uses a public Wisp server (`wss://wisp.mercurywork.shop/`). You can point it at your own in **Settings → Proxy**.
+- **Render / Railway / Fly.io / a VPS** — run `npm start` (it listens on `$PORT`). The proxy uses the built-in Wisp server, which is faster and doesn't depend on anyone else.
+- **GitHub Pages / Netlify / any static host** — publish the `public/` folder. The proxy works the same way as on Vercel.
 
 ## What's inside
 - **Proxy browser** — tabbed browser powered by [Ultraviolet](https://github.com/titaniumnetwork-dev/Ultraviolet) + bare-mux + epoxy over [Wisp](https://github.com/MercuryWorkshop/wisp-js). Bookmarks, history, new-tab page, proxy/direct toggle, open-in-about:blank.
@@ -21,4 +23,4 @@ Static hosting (GitHub Pages) also works for everything except the proxy's backe
 - **Shortcuts** — `Ctrl+Space` start menu · ``Alt+` `` switch windows · `Alt+W` close window · `Alt+T` terminal.
 - **Privacy** — tab disguise (title + icon), about:blank launcher, panic key.
 
-The proxy client files in `uv/`, `baremux/` and `epoxy/` are copied from `node_modules` by `npm run vendor` (re-run after upgrading those packages). `uv/uv.config.js` and `uv/sw.js` are NovaOS's own.
+The proxy client files in `public/uv/`, `public/baremux/` and `public/epoxy/` are copied from `node_modules` by `npm run vendor` (re-run after upgrading those packages). `public/uv/uv.config.js` and `public/uv/sw.js` are NovaOS's own.

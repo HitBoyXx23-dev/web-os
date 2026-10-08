@@ -4,10 +4,22 @@ const BASE = location.pathname.replace(/[^/]*$/, '');
 const Proxy = {
   _ready: null,
   supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.__uv$config && self.BareMux; },
-  wispUrl() { return (OS.cfg.wisp || '').trim() || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE + 'wisp/'; },
+  // Public Wisp server used when this site has no Wisp endpoint of its own (static hosts like Vercel or GitHub Pages).
+  PUBLIC_WISP: 'wss://wisp.mercurywork.shop/',
+  _auto: null,
+  ownWisp() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE + 'wisp/'; },
+  wispUrl() { return (OS.cfg.wisp || '').trim() || this._auto || this.ownWisp(); },
+  // Resolves true if a WebSocket to url opens within ms.
+  probe(url, ms = 3000) {
+    return new Promise(res => {
+      let ws; const done = ok => { clearTimeout(t); try { ws.close(); } catch (e) {} res(ok); };
+      const t = setTimeout(() => done(false), ms);
+      try { ws = new WebSocket(url); ws.onopen = () => done(true); ws.onerror = () => done(false); } catch (e) { done(false); }
+    });
+  },
   ready() {
     if (!this.supported()) return Promise.reject(new Error(location.protocol === 'file:'
-      ? 'The proxy needs NovaOS to be served over http(s). Run "npm start" and open http://localhost:8080.'
+      ? 'The proxy needs NovaOS to be served over http(s), not opened as a file.'
       : 'This browser does not support service workers.'));
     return this._ready ||= (async () => {
       const reg = await navigator.serviceWorker.register(BASE + 'uv/sw.js', { scope: __uv$config.prefix });
@@ -17,6 +29,7 @@ const Proxy = {
     })().catch(e => { this._ready = null; throw e; });
   },
   async setTransport() {
+    if (!(OS.cfg.wisp || '').trim()) this._auto = await this.probe(this.ownWisp()) ? this.ownWisp() : this.PUBLIC_WISP;
     const conn = new BareMux.BareMuxConnection(BASE + 'baremux/worker.js');
     await conn.setTransport(BASE + 'epoxy/index.mjs', [{ wisp: this.wispUrl() }]);
   },
