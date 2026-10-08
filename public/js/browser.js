@@ -4,9 +4,13 @@ const BASE = location.pathname.replace(/[^/]*$/, '');
 
 const WebProxy = {
   _ready: null, _sj: null,
-  ENGINES: { scramjet: 'Scramjet', uv: 'Ultraviolet' },
+  ENGINES: { hitboy: 'HitBoy Proxy', scramjet: 'Scramjet', uv: 'Ultraviolet' },
   TRANSPORTS: { hitboy: 'Automatic', libcurl: 'libcurl only', epoxy: 'Epoxy only' },
-  engine() { return this.ENGINES[OS.cfg.engine] ? OS.cfg.engine : 'scramjet'; },
+  engine() { return this.ENGINES[OS.cfg.engine] ? OS.cfg.engine : 'hitboy'; },
+  // HitBoy Proxy picks the page engine per site: Scramjet, or Ultraviolet for sites that failed in Scramjet.
+  siteEngines() { try { return JSON.parse(localStorage.getItem('novaos.pxSites')) || {}; } catch (e) { return {}; } },
+  setSiteEngine(url, eng) { const m = this.siteEngines(), h = hostOf(url); if (eng) m[h] = eng; else delete m[h]; try { localStorage.setItem('novaos.pxSites', JSON.stringify(m)); } catch (e) {} },
+  engineFor(url) { const e = this.engine(); return e !== 'hitboy' ? e : this.siteEngines()[hostOf(url)] || 'scramjet'; },
   transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'hitboy'; },
   supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.$scramjetLoadController && self.__uv$config; },
   // Public Wisp server used when this site has no Wisp endpoint of its own (static hosts like Vercel or GitHub Pages).
@@ -48,7 +52,7 @@ const WebProxy = {
     else if (this.transport() === 'libcurl') await conn.setTransport(BASE + 'libcurl/index.mjs', [{ websocket: this.wispUrl() }]);
     else await conn.setTransport(BASE + 'epoxy/index.mjs', [{ wisp: this.wispUrl() }]);
   },
-  encode(url) { return this.engine() === 'uv' ? __uv$config.prefix + __uv$config.encodeUrl(url) : this._sj.encodeUrl(url); },
+  encode(url, eng = this.engineFor(url)) { return eng === 'uv' ? __uv$config.prefix + __uv$config.encodeUrl(url) : this._sj.encodeUrl(url); },
   // Real URL behind a proxied path+query, from either engine.
   decode(path) {
     if (path.startsWith(__uv$config.prefix)) return __uv$config.decodeUrl(path.slice(__uv$config.prefix.length));
@@ -136,13 +140,14 @@ function BrowserApp(body, win, opts = {}) {
     if (proxyOn()) OS.proxyStatus().then(([ok, m]) => { const s = t.el.querySelector('.nt-status'); if (s) { s.textContent = m; s.previousElementSibling.className = 'dot ' + (ok ? 'ok' : 'bad'); } });
     if (t === cur) { u.value = ''; renderTabs(); renderBookmarks(); setTimeout(() => q.focus()); }
   };
-  const navigate = async (t, url) => {
+  const navigate = async (t, url, retry) => {
+    if (!retry) t.retried = false;
     t.url = url; t.title = hostOf(url); if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); }
     let src = url;
     loading(true);
     if (proxyOn()) {
       t.el.innerHTML = '';
-      try { await WebProxy.ready(); src = WebProxy.encode(url); }
+      try { await WebProxy.ready(); t.engine = WebProxy.engineFor(url); src = WebProxy.encode(url, t.engine); }
       catch (e) {
         loading(false);
         t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
@@ -164,6 +169,14 @@ function BrowserApp(body, win, opts = {}) {
         t.title = f.contentDocument.title || hostOf(t.url);
         // links that try to open new windows open as new tabs instead
         f.contentWindow.open = (href) => { if (href) newTab(new URL(href, t.url).href); return null; };
+        // HitBoy Proxy: if this engine's error page shows up, retry the site once with the other engine and remember it
+        const text = f.contentDocument.body?.innerText || '';
+        const failed = text.length < 3000 && /There was an error loading|Error processing your request/.test(text); // the engines' own error pages
+        if (failed && WebProxy.engine() === 'hitboy' && !t.retried) {
+          t.retried = true; const other = t.engine === 'uv' ? 'scramjet' : 'uv';
+          WebProxy.setSiteEngine(t.url, other === 'scramjet' ? null : other);
+          return navigate(t, t.url, true);
+        }
       } catch (e) {}
       if (t === cur) { u.value = t.url; renderBookmarks(); } renderTabs();
       addHistory(t.url, t.title);

@@ -41,6 +41,14 @@ npm start          # http://localhost:8080
 - **Shortcuts** — `Ctrl+Space` app grid · ``Alt+` `` switch windows · `Alt+W` close window · `Alt+T` terminal · `Alt+L` lock.
 - **Privacy** — tab disguise (title + icon), about:blank launcher, panic key.
 
+## Getting the most sites to work
+The proxy reaches sites through a Wisp relay. Which relay you use matters more than anything else:
+- **Free public relay** (the default on Vercel): shared by many sites, so YouTube ("confirm you're not a bot"), Reddit ("blocked by network security"), TikTok and Cloudflare-protected sites often refuse it.
+- **Your own server** (Render, Railway, a VPS): faster and not shared, but still a data-center address that some sites bot-check.
+- **Your own computer at home** — works with the most sites, because traffic leaves from your home internet: run `npm install && npm start`, then expose it with a free tunnel such as `cloudflared tunnel --url http://localhost:8080` and put `wss://<the-tunnel-address>/wisp/` in **Settings → Proxy → Wisp server** (and `wss://<the-tunnel-address>` as the Live server). Your Vercel site keeps working as the front end.
+
+In **Settings → Proxy**, the **HitBoy Proxy** page engine (the default) uses Scramjet and automatically switches a site to Ultraviolet when it fails there, and remembers it.
+
 ## Maintenance
 - `npm run vendor` copies the proxy client files (Scramjet, Ultraviolet, bare-mux, epoxy, libcurl) from `node_modules` into `public/`. Re-run after upgrading those packages.
 - `npm run dos-bundles` rebuilds `public/dos/*.jsdos` from the original shareware archives.
