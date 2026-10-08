@@ -58,11 +58,14 @@ const Boot = {
     addEventListener('keydown', key); draw(); tick(); timer = setInterval(tick, 1000);
   },
   async splash() {
-    const b = $('#boot'), log = $('#boot-log'); b.classList.remove('hidden'); log.textContent = ''; log.classList.add('hidden');
-    const esc_ = e => { if (e.key === 'Escape') log.classList.toggle('hidden'); }; addEventListener('keydown', esc_);
-    const units = ['Mounting /home (localStorage)', 'Started Journal Service', 'Reached target Local File Systems', 'Started Network Manager',
-      'Started Ultraviolet proxy service', 'Started v86 virtualization service', 'Reached target Network', 'Started Window Manager',
-      'Loaded ' + Object.keys(ALL_APPS).length + ' applications', 'Started GNOME Display Manager', 'Reached target Graphical Interface'];
+    // The command-line style boots in text mode: boot messages only, then a tty login.
+    const text = Users.list().length && Shell.current().cli;
+    const b = $('#boot'), log = $('#boot-log'); b.classList.remove('hidden'); b.classList.toggle('text', !!text); log.textContent = ''; log.classList.toggle('hidden', !text);
+    const esc_ = e => { if (e.key === 'Escape' && !text) log.classList.toggle('hidden'); }; addEventListener('keydown', esc_);
+    const units = ['Mounting /home (IndexedDB)', 'Started Journal Service', 'Reached target Local File Systems', 'Started Network Manager',
+      'Started Scramjet proxy service', 'Started v86 virtualization service', 'Reached target Network',
+      ...(text ? ['Started Getty on tty1', 'Reached target Login Prompts', 'Reached target Multi-User System']
+        : ['Started Window Manager', 'Loaded ' + Object.keys(ALL_APPS).length + ' applications', 'Started GNOME Display Manager', 'Reached target Graphical Interface'])];
     for (const u of units) { log.insertAdjacentHTML('beforeend', `[  <b>OK</b>  ] ${esc(u)}\n`); log.scrollTop = 1e9; await sleep(90 + Math.random() * 110); }
     await sleep(250);
     removeEventListener('keydown', esc_); b.classList.add('hidden'); Greeter.show();
@@ -72,6 +75,7 @@ const Boot = {
 const Greeter = {
   show(lockUser) {
     document.querySelectorAll('.toast').forEach(t => t.remove());
+    if (Users.list().length && Shell.current().cli) return TextLogin.show(lockUser);
     $('#greeter').classList.remove('hidden');
     $('#g-power').innerHTML = glyph('power', 15);
     $('#g-tray-icons').innerHTML = glyph('wifi', 15) + glyph('volume', 15);
@@ -86,7 +90,7 @@ const Greeter = {
     }
     lock.classList.add('hidden'); main.classList.remove('hidden');
     const users = Users.list();
-    if (!users.length) return this.setup(true);
+    if (!users.length) { $('#greeter').classList.add('hidden'); return Setup.start(); }
     if (users.length === 1) return this.prompt(users[0]);
     this.pick();
   },
@@ -134,18 +138,55 @@ const Greeter = {
       e.preventDefault();
       if (p.value && p.value !== p2.value) { $('#g-msg').textContent = "Passwords don't match."; return p2.focus(); }
       const u = await Users.create(n.value, p.value);
-      first ? this.pickStyle(u) : this.prompt(u);
+      this.prompt(u);
     };
-  },
-  // First boot: choose how the desktop looks (changeable later in Settings → Desktop).
-  pickStyle(u) {
-    $('#g-main').innerHTML = `<div class="g-card g-setup g-style"><div class="g-setup-head"><h2>Choose your desktop</h2><p>You can change this, or mix parts of each, any time in Settings → Desktop.</p></div>
-      <div class="style-grid">${Object.entries(SHELL_PRESETS).map(([id, p]) => `<button class="style-card" data-shell="${id}">${shellPreview(p)}<b>${esc(p.name)}</b><small>${p.family}</small></button>`).join('')}</div></div>`;
-    $('#g-main').onclick = e => { const b = e.target.closest('[data-shell]'); if (!b) return; $('#g-main').onclick = null; OS.set({ shell: b.dataset.shell, themeName: null, wall: null, accent: null }); this.done(u); };
   },
   done(u, unlocking) {
     OS.user = u.user; OS.account = u;
     try { localStorage.setItem('novaos.lastUser', u.user); } catch (e) {}
-    this.hide(); OS.enterDesktop(unlocking);
+    try { localStorage.setItem('novaos.lastLogin.' + u.user, new Date().toString().slice(0, 24)); } catch (e) {}
+    this.hide(); $('#tty').classList.add('hidden'); OS.enterDesktop(unlocking);
+  },
+};
+
+// Text-mode login (agetty-style) for the command-line style; also its lock screen.
+const TextLogin = {
+  show(lockUser) {
+    const el = $('#tty'); el.classList.remove('hidden'); $('#greeter').classList.add('hidden');
+    el.innerHTML = '<pre class="tty-out"></pre><div class="tty-line"><span class="tty-ps"></span><input spellcheck="false" autocomplete="off" autocapitalize="off"></div>';
+    const out = el.querySelector('.tty-out'), ps = el.querySelector('.tty-ps'), inp = el.querySelector('input');
+    const print = t => { out.textContent += t + '\n'; el.scrollTop = 1e9; };
+    let user = lockUser ? Users.get(lockUser) : null, fails = 0;
+    const ask = (label, secret) => { ps.textContent = label; inp.type = secret ? 'password' : 'text'; inp.value = ''; inp.disabled = false; inp.focus(); };
+    const askUser = () => { user = null; ask('hitboy login: '); };
+    const success = u => {
+      const last = localStorage.getItem('novaos.lastLogin.' + u.user);
+      OS.loginNote = !lockUser && last ? `Last login: ${last} on tty1\n` : '';
+      Greeter.done(u, !!lockUser);
+    };
+    const fail = async () => {
+      inp.disabled = true; await sleep(900); print(lockUser ? 'Authentication failed.' : '\nLogin incorrect');
+      if (++fails >= 2 && !lockUser) print(`(Accounts on this computer: ${Users.list().map(x => x.user).join(', ')})`);
+      lockUser ? ask('Password: ', true) : askUser();
+    };
+    inp.onkeydown = async e => {
+      if (e.key !== 'Enter') return;
+      const v = inp.value; print(ps.textContent + (inp.type === 'password' ? '' : v));
+      if (!user && !lockUser) {
+        if (!v.trim()) return askUser();
+        user = Users.list().find(x => x.user === v.trim().toLowerCase() || x.name.toLowerCase() === v.trim().toLowerCase()) || { user: v, hash: 'x', missing: true };
+        if (!user.missing && !user.hash) return success(user);
+        return ask('Password: ', true);
+      }
+      if (!user.missing && await Users.check(user, v)) return success(user);
+      fail();
+    };
+    el.onclick = () => getSelection().isCollapsed && inp.focus();
+    if (lockUser) {
+      print(`\nHitBoy Web-OS 3.0 — tty1 is locked by ${user.user}.\n`);
+      if (!user.hash) { print('Press Enter to unlock.'); ps.textContent = ''; inp.type = 'text'; inp.onkeydown = e => e.key === 'Enter' && success(user); return inp.focus(); }
+      return ask('Password: ', true);
+    }
+    print(`\nHitBoy Web-OS 3.0 hitboy tty1\n`); askUser();
   },
 };

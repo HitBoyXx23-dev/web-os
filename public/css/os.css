@@ -511,3 +511,63 @@ canvas { display: block; max-width: 100%; }
 .rec-stage canvas { max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; border-radius: 6px; box-shadow: 0 0 0 1px var(--line); }
 .rec-hint { position: absolute; max-width: 360px; text-align: center; color: var(--text-2); font-size: 13px; }
 .rec-time { color: #ef4444; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* Setup wizard */
+#setup { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 16px; color: #fff; transition: background .4s; }
+.su-win { width: min(940px, 100%); height: min(620px, 100%); display: flex; border-radius: 16px; overflow: hidden; background: rgba(22, 22, 26, .78); border: 1px solid rgba(255, 255, 255, .1); backdrop-filter: blur(28px) saturate(1.3); box-shadow: 0 30px 80px rgba(0, 0, 0, .5); }
+.su-win aside { width: 210px; flex: none; padding: 22px 16px; background: rgba(255, 255, 255, .04); border-right: 1px solid rgba(255, 255, 255, .08); }
+.su-brand { display: flex; align-items: center; gap: 10px; font-weight: 600; margin-bottom: 26px; }
+.su-logo { width: 26px; height: 26px; color: var(--accent); }
+.su-logo svg, .su-mark svg { width: 100%; height: 100%; }
+.su-win ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; counter-reset: su; }
+.su-win aside li { counter-increment: su; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: rgba(255, 255, 255, .5); font-size: 13px; }
+.su-win aside li::before { content: counter(su); width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 11px; border: 1px solid rgba(255, 255, 255, .25); }
+.su-win aside li.on { color: #fff; background: rgba(255, 255, 255, .08); font-weight: 500; }
+.su-win aside li.on::before { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.su-win aside li.done { color: rgba(255, 255, 255, .8); }
+.su-win aside li.done::before { content: '✓'; background: rgba(255, 255, 255, .14); border-color: transparent; }
+.su-win section { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.su-body { flex: 1; overflow: auto; padding: 30px 34px 10px; }
+.su-body h2 { font-size: 22px; margin: 0 0 6px; }
+.su-sub { color: rgba(255, 255, 255, .65); margin: 0 0 20px; max-width: 560px; }
+.su-msg { padding: 0 34px; color: #fca5a5; font-size: 13px; min-height: 18px; }
+.su-win footer { display: flex; gap: 8px; padding: 14px 34px 22px; }
+.su-win footer .ghost { color: #fff; }
+.su-hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 18px; }
+.su-mark { width: 64px; height: 64px; color: var(--accent); margin-bottom: 18px; }
+.su-hero h1 { font-size: 30px; font-weight: 600; margin: 0 0 8px; letter-spacing: -.01em; }
+.su-hero p { color: rgba(255, 255, 255, .7); max-width: 460px; margin: 0 0 26px; }
+.su-feats { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; max-width: 620px; }
+.su-feats li { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: rgba(255, 255, 255, .05); font-size: 13px; color: rgba(255, 255, 255, .85); }
+.su-body .su-styles { grid-template-columns: repeat(auto-fill, minmax(124px, 1fr)); gap: 10px; }
+.su-styles .style-card { background: rgba(255, 255, 255, .06); color: #fff; }
+.su-styles .style-card small { color: rgba(255, 255, 255, .55); }
+.su-hybrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 18px; }
+.su-hybrid .field, .su-form .field { color: rgba(255, 255, 255, .75); }
+#setup select, #setup input:not([type=checkbox]) { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .16); color: #fff; }
+#setup select option { color: #000; }
+#setup .muted { color: rgba(255, 255, 255, .45); }
+.su-mode { margin-bottom: 16px; }
+.su-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+.su-theme { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 10px; border: 2px solid transparent; background: rgba(255, 255, 255, .06); color: #fff; text-align: left; }
+.su-theme.on { border-color: var(--accent); }
+.su-theme i { position: relative; display: block; height: 62px; border-radius: 6px; }
+.su-theme em { position: absolute; right: 6px; bottom: 6px; width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, .8); }
+.su-theme b { font-size: 12px; font-weight: 500; padding: 0 2px 2px; }
+.su-form { display: flex; flex-direction: column; gap: 14px; max-width: 380px; }
+.su-opts { display: flex; flex-direction: column; gap: 8px; max-width: 600px; }
+.su-opt { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, .05); }
+.su-opt b { font-weight: 500; display: block; }
+.su-opt small { color: rgba(255, 255, 255, .55); }
+.su-bar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .12); overflow: hidden; max-width: 560px; }
+.su-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .35s var(--ease); }
+.su-log { margin: 18px 0 0; font: 12px/1.7 var(--mono); color: rgba(255, 255, 255, .6); white-space: pre-wrap; }
+@media (max-width: 680px) { .su-win aside { display: none; } .su-body { padding: 22px 18px 8px; } .su-win footer { padding: 12px 18px 18px; } .su-feats { grid-template-columns: 1fr; } }
+
+/* Text-mode boot and login (command-line style) */
+#boot.text > :not(#boot-log) { display: none; }
+#tty { position: fixed; inset: 0; z-index: 9600; background: #000; color: #d0d0d0; font: 15px/1.5 var(--mono); padding: 16px 20px; overflow: auto; }
+#tty .tty-out { margin: 0; font: inherit; white-space: pre-wrap; }
+#tty .tty-line { display: flex; white-space: pre; }
+#tty input { flex: 1; background: none; border: 0; outline: 0; padding: 0; color: inherit; font: inherit; border-radius: 0; box-shadow: none; caret-color: #d0d0d0; }
+#tty input[type=password] { color: transparent; }

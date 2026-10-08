@@ -188,7 +188,7 @@ const APPS = {
     const print = s => { out.textContent += s + '\n'; body.firstChild.scrollTop = 1e9; };
     const prompt_ = () => ps.textContent = `${OS.user}@hitboy ${cwd === '/' ? '~' : '~' + cwd} $ `;
     const cmds = {
-      help: () => 'ls [dir]   cd <dir>   pwd   cat <file>   echo <text> [> file]\nmkdir <dir>   touch <file>   rm <path>   clear   date   whoami\nopen <app>   apps   neofetch   history\ndesktops   startx [style]   theme [name]',
+      help: () => 'ls [dir]   cd <dir>   pwd   cat <file>   echo <text> [> file]\nmkdir <dir>   touch <file>   rm <path>   clear   date   whoami\nopen <app>   apps   neofetch   history\ndesktops   startx [style]   theme [name]   setup\nlock   logout   reboot   poweroff',
       ls: a => FS.list(FS.join(cwd, a[0] || '.')).map(f => f.name + (f.type === 'dir' ? '/' : '')).join('   '),
       cd: a => { const p = FS.join(cwd, a[0] || '/'); if (!FS.isDir(p)) return 'cd: no such directory: ' + a[0]; cwd = p; },
       pwd: () => cwd, cat: a => FS.read(FS.join(cwd, a[0] || '')) ?? 'cat: no such file: ' + a[0],
@@ -356,6 +356,7 @@ const APPS = {
       if (page === 'system') html = `<h3>System</h3>
         ${row('HitBoy Web-OS', 'Version 3.0', `<button class="about">About</button>`)}
         ${row('Boot menu', 'Show the GRUB menu and boot messages at startup', `<div class="seg">${['show', 'skip'].map(v => `<button data-fast="${v}" class="${!!c.fastBoot === (v === 'skip') ? 'on' : ''}">${v === 'show' ? 'Show' : 'Skip'}</button>`).join('')}</div>`)}
+        ${row('Setup', 'Go through setup again: desktop, theme and options', `<button class="rsetup">Run setup again</button>`)}
         ${row('Keyboard shortcuts', 'Ctrl+Space apps · Alt+` switch windows · Alt+W close · Alt+T terminal · Alt+L lock', '')}
         ${row('Storage', Object.keys(localStorage).filter(k => k.startsWith('novaos.')).reduce((n, k) => n + localStorage.getItem(k).length, 0).toLocaleString() + ' bytes used in this browser', '')}
         ${row('Reset', 'Erase files, settings, installed apps and scores', `<button class="danger rs">Reset…</button>`)}`;
@@ -373,6 +374,7 @@ const APPS = {
       if (d.engine) OS.set({ engine: d.engine });
       if (d.transport) { OS.set({ transport: d.transport }); try { await WebProxy.ready(); await WebProxy.setTransport(); } catch (err) { OS.toast(err.message); } }
       if (d.fast) OS.set({ fastBoot: d.fast === 'skip' });
+      if (b.classList.contains('rsetup')) return Setup.start({ rerun: true });
       if (d.rmuser && confirm('Remove this user? Their files stay on this computer.')) Users.remove(d.rmuser);
       if (b.classList.contains('setpw')) {
         const a = body.querySelector('.np').value, b2 = body.querySelector('.np2').value;

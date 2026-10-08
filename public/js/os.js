@@ -55,6 +55,8 @@ const OS = {
   },
   launch(id, arg) {
     const app = ALL_APPS[id]; if (!app) return;
+    // The command-line style is text only: no windows.
+    if (Shell.cliActive()) return Shell.cliPrint(`${id}: cannot open display: no graphical session (type "startx" to start a desktop)`);
     this.closeFlyouts();
     return WM.open({ title: app.name, icon: app.icon, w: app.w, h: app.h, appId: id, content: (body, win) => app.run(body, win, arg) });
   },
@@ -62,7 +64,7 @@ const OS = {
   toast(msg) {
     this.notes.unshift({ msg, at: new Date() }); this.notes = this.notes.slice(0, 30);
     $('#tb-clock')?.classList.toggle('has-notes', !!this.notes.length);
-    if (this.cfg.dnd) return;
+    if (this.cfg.dnd || Shell.cliActive() || !$('#tty').classList.contains('hidden')) return;
     document.querySelectorAll('.toast').forEach(t => t.remove());
     const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = `<b>HitBoy Web-OS</b><span></span>`; t.querySelector('span').textContent = msg;
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
@@ -88,7 +90,7 @@ const OS = {
   enterDesktop(unlocking) {
     $('#desktop').classList.remove('hidden');
     Shell.apply();
-    if (Shell.current().cli) Shell.showCli(); else this.set({ lastGui: this.cfg.shell || 'gnome' });
+    if (Shell.current().cli) { if (unlocking && Shell.cliActive()) $('#cli input')?.focus(); else Shell.showCli(); } else this.set({ lastGui: this.cfg.shell || 'hitboy' });
     if (!unlocking) {
       const greet = new Date().getHours(); this.toast(`Good ${greet < 12 ? 'morning' : greet < 18 ? 'afternoon' : 'evening'}, ${this.account.name.split(' ')[0]}.`);
       if (this.afterLogin) { const f = this.afterLogin; this.afterLogin = null; f(); }

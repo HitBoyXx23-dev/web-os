@@ -8,17 +8,19 @@ const SHELL_PARTS = {
   chrome: { gnome: 'GNOME (round, right)', windows: 'Windows 11', windows10: 'Windows 10', mac: 'macOS (traffic lights)', kde: 'Plasma Breeze' },
 };
 const SHELL_PRESETS = {
+  hitboy: { name: 'HitBoy (original)', family: 'HitBoy', top: 'gnome', bottom: 'dock', launcher: 'grid', chrome: 'gnome', theme: 'default' },
   win11: { name: 'Windows 11', family: 'Windows', top: 'none', bottom: 'win11', launcher: 'start11', chrome: 'windows', theme: 'fluent' },
   win10: { name: 'Windows 10', family: 'Windows', top: 'none', bottom: 'win10', launcher: 'start10', chrome: 'windows10', theme: 'fluent10' },
   macos: { name: 'macOS', family: 'macOS', top: 'mac', bottom: 'dock-mac', launcher: 'grid', chrome: 'mac', theme: 'aqua' },
   ubuntu: { name: 'Ubuntu', family: 'Linux', top: 'gnome', bottom: 'dock-left', launcher: 'grid', chrome: 'gnome', theme: 'yaru' },
-  gnome: { name: 'GNOME', family: 'Linux', top: 'gnome', bottom: 'dock', launcher: 'grid', chrome: 'gnome', theme: 'default' },
+  gnome: { name: 'GNOME', family: 'Linux', top: 'gnome', bottom: 'dock', launcher: 'grid', chrome: 'gnome', theme: 'adwaita' },
   kde: { name: 'KDE Plasma (Arch)', family: 'Linux', top: 'none', bottom: 'kde', launcher: 'kickoff', chrome: 'kde', theme: 'breeze' },
   cli: { name: 'Command line', family: 'Linux', cli: true, top: 'none', bottom: 'none', launcher: 'grid', chrome: 'gnome', theme: 'default' },
 };
 // Dark-mode palettes (light mode keeps the neutral light palette, with the theme's accent and wallpaper).
 const THEMES = {
   default: { name: 'HitBoy', accent: '#3b82f6', wall: 'linear-gradient(165deg,#20262f 0%,#13171d 55%,#0c0e12 100%)' },
+  adwaita: { name: 'Adwaita (GNOME)', accent: '#3584e4', wall: 'radial-gradient(ellipse at 70% 20%, #4a86cf 0%, transparent 50%), linear-gradient(160deg,#1c71d8 0%,#1a3e72 50%,#0f1c33 100%)', dark: { bg: '#1e1e1e', surface: '#242424', 'surface-2': '#2e2e2e', 'surface-3': '#3a3a3a' } },
   fluent: { name: 'Fluent (Windows 11)', accent: '#4cc2ff', wall: 'radial-gradient(ellipse at 50% 115%, #9bd7ff 0%, #2a8ae8 22%, #0b4ab5 45%, #06215a 70%, #020a1f 100%)', dark: { bg: '#1c1c1c', surface: '#202020', 'surface-2': '#272727', 'surface-3': '#2d2d2d' } },
   fluent10: { name: 'Windows 10', accent: '#0078d7', wall: 'linear-gradient(115deg,#00122e 0%,#022a63 38%,#1a74d6 58%,#5fb2ff 62%,#0a3b7a 70%,#00122e 100%)', dark: { bg: '#191919', surface: '#1f1f1f', 'surface-2': '#2b2b2b', 'surface-3': '#333333' } },
   aqua: { name: 'Aqua (macOS)', accent: '#0a84ff', wall: 'linear-gradient(160deg,#f7b267 0%,#e05780 32%,#6a3fb5 65%,#1b1d4b 100%)', dark: { bg: '#1e1e1e', surface: '#1e1e1e', 'surface-2': '#2a2a2a', 'surface-3': '#3a3a3c' } },
@@ -37,11 +39,14 @@ const BOTTOM_SIZE = { dock: 76, 'dock-mac': 78, 'dock-left': 0, win11: 48, win10
 const Shell = {
   // The active style: a preset, or the user's custom combination.
   current() {
-    const c = OS.cfg, preset = SHELL_PRESETS[c.shell] || (c.shell === 'custom' ? null : SHELL_PRESETS.gnome);
-    return preset ? { ...preset, id: c.shell in SHELL_PRESETS ? c.shell : 'gnome' } : { name: 'Custom', id: 'custom', ...SHELL_PRESETS.gnome, ...c.shellCustom, cli: false };
+    const c = OS.cfg, preset = SHELL_PRESETS[c.shell] || (c.shell === 'custom' ? null : SHELL_PRESETS.hitboy);
+    return preset ? { ...preset, id: c.shell in SHELL_PRESETS ? c.shell : 'hitboy' } : { name: 'Custom', id: 'custom', ...SHELL_PRESETS.hitboy, ...c.shellCustom, cli: false };
   },
   theme() { return THEMES[OS.cfg.themeName] || THEMES[this.current().theme] || THEMES.default; },
-  choose(id) { OS.set({ shell: id, themeName: null, wall: null, accent: null }); this.apply(); },
+  choose(id) {
+    OS.set({ shell: id, themeName: null, wall: null, accent: null }); this.apply();
+    if (this.current().cli) { WM.closeAll(); OS.closeFlyouts(); this.showCli(); } // text only: the desktop goes away
+  },
   customize(patch) {
     const s = this.current();
     OS.set({ shell: 'custom', shellCustom: { top: s.top, bottom: s.bottom, launcher: s.launcher, chrome: s.chrome, theme: s.theme, ...OS.cfg.shellCustom, ...patch } });
@@ -188,9 +193,12 @@ const Shell = {
     el.innerHTML = '';
     const fake = { id: 'cli', el, cleanup: [], body: el };
     APPS.terminal.run(el, fake);
-    el.querySelector('.out').textContent = `HitBoy Web-OS 3.0 (tty1)\n\n${OS.user} logged in. Type "startx" to start a desktop ("startx macos", "startx win11"…),\n"desktops" to list them, or "help" for other commands.\n\n`;
+    el.querySelector('.out').textContent = `${OS.loginNote || ''}HitBoy Web-OS 3.0 (tty1)\n\n${OS.user} logged in. Type "startx" to start a desktop ("startx macos", "startx win11"…),\n"desktops" to list them, or "help" for other commands.\n\n`;
     el.querySelector('input').focus();
   },
+  // True while the command-line session is on screen: nothing graphical may open then.
+  cliActive() { return !$('#cli').classList.contains('hidden'); },
+  cliPrint(s) { const out = $('#cli .out'); if (!out) return; out.textContent += s + '\n'; $('#cli .term').scrollTop = 1e9; },
   hideCli() { $('#cli').classList.add('hidden'); $('#cli').innerHTML = ''; $('#desktop').classList.remove('cli-mode'); },
 };
 
@@ -198,11 +206,18 @@ const Shell = {
 window.TERM_EXTRA = {
   desktops: () => Object.entries(SHELL_PRESETS).map(([id, p]) => `${id.padEnd(8)} ${p.name}`).join('\n') + '\ncustom   Your hybrid combination (Settings → Desktop)',
   startx: a => {
-    const id = a[0] || (OS.cfg.lastGui && OS.cfg.lastGui !== 'cli' ? OS.cfg.lastGui : 'gnome');
+    const id = a[0] || (OS.cfg.lastGui && OS.cfg.lastGui !== 'cli' ? OS.cfg.lastGui : 'hitboy');
     if (!SHELL_PRESETS[id] && id !== 'custom') return `startx: unknown desktop "${id}" (see "desktops")`;
     if (id === 'cli') return 'startx: already in the command line';
     OS.set({ shell: id }); Shell.hideCli(); Shell.apply(); return '';
   },
+  logout: () => { OS.power('logout'); return ''; },
+  exit: () => { OS.power('logout'); return ''; },
+  lock: () => { OS.power('lock'); return ''; },
+  reboot: () => { OS.power('restart'); return ''; },
+  poweroff: () => { OS.power('shutdown'); return ''; },
+  shutdown: () => { OS.power('shutdown'); return ''; },
+  setup: () => { Setup.start({ rerun: true }); return ''; },
   theme: a => THEMES[a[0]] ? (OS.set({ themeName: a[0], accent: null, wall: null }), Shell.apply(), `Theme set to ${THEMES[a[0]].name}`) : 'Themes: ' + Object.keys(THEMES).join(', '),
 };
 
