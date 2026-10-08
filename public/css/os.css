@@ -458,3 +458,56 @@ canvas { display: block; max-width: 100%; }
 .run-drop { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 30px; border: 2px dashed var(--line-2); border-radius: 14px; margin: 16px; box-sizing: border-box; height: calc(100% - 32px); }
 .run-drop p { max-width: 460px; }
 .runapp .card { cursor: default; }
+
+/* Games hub */
+.hub { display: flex; height: 100%; min-height: 0; }
+.hub nav { width: 170px; flex: none; padding: 10px 8px; border-right: 1px solid var(--line); background: var(--surface); overflow: auto; display: flex; flex-direction: column; gap: 1px; }
+.hub nav button { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; border-radius: 6px; background: none; border: 0; color: var(--text-2); text-align: left; }
+.hub nav button span { font-size: 11px; color: var(--text-3); }
+.hub nav button:hover { background: var(--hover); color: var(--text); }
+.hub nav button.on { background: var(--press); color: var(--text); font-weight: 500; }
+.hub section { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hub-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 16px 20px 10px; }
+.hub-head h3 { margin: 0 0 2px; }
+.hub-head p { margin: 0; }
+.hub-q { width: 220px; }
+.hub-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr)); gap: 8px; padding: 4px 20px 16px; align-content: start; }
+.hub-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 8px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); cursor: pointer; text-align: center; transition: border-color .12s, transform .12s var(--ease); }
+.hub-card:hover { border-color: var(--line-2); transform: translateY(-1px); }
+.hub-card b { font-weight: 500; font-size: 13px; line-height: 1.25; }
+.hub-card small { font-size: 11px; color: var(--text-3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hub-rm { position: absolute; top: 4px; right: 4px; opacity: 0; }
+.hub-card:hover .hub-rm { opacity: 1; }
+.hub-add { padding: 10px 20px; border-top: 1px solid var(--line); gap: 8px; }
+.tile-fav { background: #fff; box-sizing: border-box; object-fit: contain; }
+@media (max-width: 640px) { .hub nav { width: 120px; } .hub-q { width: 130px; } }
+
+/* Movies */
+.movies { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.mv-head { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+.mv-head h3 { margin: 0; }
+.mv-q { width: 220px; }
+.mv-body { flex: 1; overflow: auto; }
+.mv-row { padding: 14px 0 4px; }
+.mv-row h4 { margin: 0 20px 8px; font-size: 14px; font-weight: 600; }
+.mv-strip { display: flex; align-items: flex-start; gap: 10px; overflow-x: auto; padding: 0 20px 10px; min-height: 60px; scrollbar-width: thin; }
+.mv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; padding: 0 20px 20px; }
+.mv-card { flex: none; width: 140px; display: flex; flex-direction: column; gap: 4px; padding: 0; background: none; border: 0; color: var(--text); text-align: left; cursor: pointer; }
+.mv-grid .mv-card { width: auto; }
+.mv-card img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; background: var(--surface-3); transition: transform .15s var(--ease), box-shadow .15s; }
+.mv-card:hover img { transform: scale(1.03); box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
+.mv-card b { font-size: 12px; font-weight: 500; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mv-card small { font-size: 11px; color: var(--text-3); }
+.mv-player { padding: 14px 20px 20px; }
+.mv-player h3 { margin: 12px 0; }
+.mv-video { background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; display: grid; place-items: center; }
+.mv-video video { width: 100%; height: 100%; }
+.mv-desc { margin-top: 12px; line-height: 1.5; max-width: 760px; }
+
+/* Recorder */
+.rec { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.rec .toolbar { flex-wrap: wrap; gap: 8px; background: var(--surface-2); }
+.rec-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; background: #050506; padding: 12px; }
+.rec-stage canvas { max-width: 100%; max-height: 100%; aspect-ratio: 16 / 9; border-radius: 6px; box-shadow: 0 0 0 1px var(--line); }
+.rec-hint { position: absolute; max-width: 360px; text-align: center; color: var(--text-2); font-size: 13px; }
+.rec-time { color: #ef4444; font-variant-numeric: tabular-nums; font-weight: 600; }

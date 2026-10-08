@@ -1,6 +1,6 @@
 # HitBoy Web-OS
 
-A Linux-style desktop that runs in the browser: GRUB boot menu, boot splash (press Esc for the systemd log), a GNOME-style login screen with user accounts, a top bar, dock and app grid, quick settings, a notification center, real app icons, windows you can drag, resize and snap, light and dark themes, a real file system, and it installs as an app and works offline.
+A desktop OS that runs in the browser: GRUB boot menu, boot splash (press Esc for the systemd log), a login screen with user accounts, a choice of desktops (Windows 11/10, macOS, GNOME/Ubuntu, KDE, a text-only console, or your own mix), quick settings, a notification center, real app icons, windows you can drag, resize and snap, light and dark themes, a real file system, and it installs as an app and works offline.
 
 ## Run it
 ```bash
@@ -15,6 +15,8 @@ npm start          # http://localhost:8080
 - **GitHub Pages / Netlify / any static host** — publish the `public/` folder. Same as Vercel.
 
 ## What's inside
+- **Desktop styles** — pick one on first login or in **Settings → Desktop**: Windows 11, Windows 10, macOS, Ubuntu, GNOME, KDE Plasma, or a CLI-only console (`startx` brings the desktop back). **Hybrid** mixes the parts freely (top bar, taskbar or dock, launcher, window buttons), with 12 themes (Arch, Ubuntu Yaru, Catppuccin, Nord, Dracula, Gruvbox, Hyprland/Wayland-style glass…), corner radius and transparency. The terminal has `desktops`, `startx` and `theme`.
+- **Run** — opens programs and game files with the right emulator: DOS `.exe`/`.com`/`.bat` and `.zip`s in DOSBox; Windows programs in a Windows 98 virtual machine with your files on drive D:; Flash `.swf` in [Ruffle](https://ruffle.rs); Python `.py` in [Pyodide](https://pyodide.org); console games you own (`.nes`, `.sfc`, `.gba`, `.md`, `.n64`…) in [EmulatorJS](https://emulatorjs.org); `.iso`/`.img` in VMBox. Also available from **Files → Run…**. Modern 64-bit Windows apps can't run in a browser.
 - **VMBox** — a VirtualBox-style virtual machine manager (powered by [v86](https://github.com/copy/v86)). Create machines from templates or your own ISO / hard-disk / floppy image, set memory and networking, and run them in windows with Pause, Reset, Ctrl+Alt+Del, Save State, Screenshot and Full Screen. Templates include:
   - **Ubuntu 18.04 LTS** — real Ubuntu (Ubuntu's own 4.15 kernel and packages), boots in seconds from a snapshot, internet and `apt` work through the Wisp server. Built from the official `i386/ubuntu:bionic` image by `scripts/build-ubuntu18.sh` (hosted in this repo).
   - **Ubuntu 24.04 LTS** — real x86-64 Ubuntu via [container2wasm](https://github.com/ktock/container2wasm); slower, terminal only, no network, opens in its own tab (it needs cross-origin isolation). Its image is built on GitHub: run the **Build Ubuntu 24.04** workflow in the Actions tab once (about 30–60 min), it commits the image, then redeploy.
@@ -22,10 +24,12 @@ npm start          # http://localhost:8080
 - **Proxy browser** — tabbed browser powered by [Scramjet](https://github.com/MercuryWorkshop/scramjet) (handles YouTube, Discord, Spotify…), with [Ultraviolet](https://github.com/titaniumnetwork-dev/Ultraviolet) as a fallback engine. Traffic goes through bare-mux and libcurl or epoxy (both end-to-end encrypted) over [Wisp](https://github.com/MercuryWorkshop/wisp-js). Choose the engine and transport in **Settings → Proxy**. Bookmarks, history, new-tab page, open-in-about:blank.
 - **Linux** — a quick x86 Linux terminal (Buildroot, kernel 6.8) with an [xterm.js](https://xtermjs.org) terminal, internet through the same Wisp server, and your Home folder shared at `/mnt` (press **Save /mnt to Home** to copy changes back).
 - **Classic DOS games** — Doom, Wolfenstein 3D and Commander Keen (episode 1 shareware releases) running in [js-dos](https://js-dos.com).
-- **Games** — Snake, 2048, Minesweeper, Tic-Tac-Toe, Breakout, Flappy, web games, and add-your-own by URL.
+- **Games** — 115+ games in categories with search: built-ins (Snake, 2048, Minesweeper, Tic-Tac-Toe, Breakout, Flappy, Doom, Wolfenstein 3D, Keen) plus web games from their official sites — multiplayer (Minecraft Classic, Krunker, Shell Shockers, Slither.io, Bloxd.io, Smash Karts, TETR.IO, Lichess, Skribbl.io…), action, racing, sports, puzzle, idle, strategy and sandbox. Web games open through the proxy; add your own by URL.
+- **Movies** — thousands of public-domain films from the [Internet Archive](https://archive.org) (classics, comedy, noir, sci-fi & horror, silent films, cartoons, open movies like Big Buck Bunny), with search, plus links to free ad-supported services (Tubi, Pluto TV, Plex, Kanopy).
+- **Recorder** — an OBS-style recorder: capture your screen, a window or a tab, add your camera as a picture-in-picture, the microphone and a text overlay, and save a WebM to Videos.
 - **Files** — stored in IndexedDB (binary files, no 5 MB limit). Upload, drag and drop from your computer, download, rename, Open With, image/PDF viewer.
 - **Text Editor** — CodeMirror with syntax highlighting for HTML, CSS, JS, JSON, Python, Markdown and shell, plus live **Preview** for HTML files.
-- **App Store** — install YouTube, Discord, Spotify, Twitch, TikTok, Poki, Scratch, VS Code and more to your desktop; they open through the proxy.
+- **App Store** — install YouTube, Discord, Spotify, Twitch, TikTok, Poki, Scratch, VS Code, 3D tools (SculptGL, three.js editor, Tinkercad), creative apps (Photopea, Pixlr, miniPaint, Kleki, AudioMass, Excalidraw, diagrams.net), Google Docs, Microsoft 365, Notion, Figma, Canva, Desmos, Replit and more; they open through the proxy.
 - **More apps** — Terminal, Paint (saves into Pictures), Calculator, Videos, System Monitor, Settings.
 - **Accounts** — first boot asks you to create an account; add more with "Not listed?" on the login screen and manage them in Settings → Users. Passwords are hashed and stored only in your browser — they keep casual users out, they are not real security.
 - **Shortcuts** — `Ctrl+Space` app grid · ``Alt+` `` switch windows · `Alt+W` close window · `Alt+T` terminal · `Alt+L` lock.
@@ -44,4 +48,5 @@ npm start          # http://localhost:8080
 - [v86](https://github.com/copy/v86) by Fabian Hemmer (BSD-2-Clause); BIOS, the Buildroot image and the VMBox template images (Arch, Windows, BSDs, …) come from the v86 project.
 - [container2wasm](https://github.com/ktock/container2wasm) (Apache-2.0) and [browser_wasi_shim](https://github.com/bjorn3/browser_wasi_shim) for Ubuntu 24.04. Ubuntu is a trademark of Canonical Ltd.; Windows is a trademark of Microsoft.
 - [js-dos](https://js-dos.com) / DOSBox. Doom and Wolfenstein 3D shareware © id Software; Commander Keen shareware © id Software / Apogee — distributed unmodified as permitted by their shareware licences.
-- [CodeMirror](https://codemirror.net) and [xterm.js](https://xtermjs.org) (MIT), loaded from cdnjs.
+- [CodeMirror](https://codemirror.net) and [xterm.js](https://xtermjs.org) (MIT), loaded from cdnjs. [Ruffle](https://ruffle.rs), [Pyodide](https://pyodide.org), [EmulatorJS](https://emulatorjs.org) and [fflate](https://github.com/101arrowz/fflate), loaded from jsDelivr.
+- Web games, apps and streaming services belong to their owners and are opened from their official sites. Films come from the Internet Archive's public-domain collections. Site icons come from Google's favicon service.

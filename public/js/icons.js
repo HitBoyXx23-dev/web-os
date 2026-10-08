@@ -53,9 +53,12 @@ const TILE = {
 };
 // Real app icons (Papirus icon theme, vendored in /icons).
 const realIcon = name => ({ img: 'icons/' + name + '.svg' });
+// A website's own icon (via Google's favicon service); falls back to a letter tile if it can't load.
+const favIcon = url => { const host = new URL(url).hostname.replace(/^www\./, ''); return { img: `https://www.google.com/s2/favicons?domain=${host}&sz=64`, fb: host[0].toUpperCase() }; };
+const tileFail = img => { const s = document.createElement('span'); s.className = 'tile'; s.style.cssText = `width:${img.width}px;height:${img.height}px;border-radius:${Math.round(img.width * .26)}px;--t:#52525b;font-size:${Math.round(img.width * .42)}px`; s.textContent = img.dataset.fb || '?'; img.replaceWith(s); };
 // icon: realIcon('name') for a real icon, a glyph key, or { mono: 'YT', bg: '#c00' } for monogram tiles.
 function tile(icon, size = 40) {
-  if (icon && icon.img) return `<img class="tile-img" src="${esc(icon.img)}" width="${size}" height="${size}" alt="" draggable="false" loading="lazy">`;
+  if (icon && icon.img) return `<img class="tile-img${icon.fb ? ' tile-fav' : ''}" src="${esc(icon.img)}" width="${size}" height="${size}" alt="" draggable="false" loading="lazy"${icon.fb ? ` style="padding:${Math.round(size * .14)}px;border-radius:${Math.round(size * .26)}px" data-fb="${esc(icon.fb)}" onerror="tileFail(this)"` : ''}>`;
   const r = Math.round(size * .26);
   if (icon && typeof icon === 'object') {
     return `<span class="tile" style="width:${size}px;height:${size}px;border-radius:${r}px;--t:${icon.bg};font-size:${Math.round(size * (icon.mono.length > 2 ? .3 : .38))}px">${esc(icon.mono)}</span>`;

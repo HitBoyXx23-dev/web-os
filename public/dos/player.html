@@ -11,6 +11,8 @@
 <body>
 <div id="dos"></div>
 <div id="msg">Starting…</div>
+<script>// Keyboard Lock only works in a top-level page; inside the OS window it would just throw.
+if (navigator.keyboard && window.top !== window) navigator.keyboard.lock = () => Promise.resolve();</script>
 <script src="https://cdn.jsdelivr.net/npm/js-dos@8.5.3/dist/js-dos.js" onerror="document.getElementById('msg').textContent = 'Could not load the DOS emulator. Check your connection and try again.'"></script>
 <script>
   // Runs one js-dos bundle from this folder: player.html?game=doom

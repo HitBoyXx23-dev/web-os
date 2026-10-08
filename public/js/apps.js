@@ -245,7 +245,7 @@ const APPS = {
       const match = s => !q || (s.name + s.desc).toLowerCase().includes(q);
       body.innerHTML = `<div class="app-head row" style="justify-content:space-between"><div><h3>App Store</h3><p>Install web apps to your desktop. They open through the proxy browser.</p></div>
         <input class="sq" placeholder="Search" style="width:200px" value="${esc(q)}"></div>` +
-        cats.map(c => { const list = STORE.filter(s => s.cat === c && match(s)); return list.length ? `<div class="section-label">${c}</div><div class="cards">${list.map(s => card(s.img ? realIcon(s.img) : { mono: s.mono, bg: s.bg }, s.name, s.desc, `data-id="${s.id}"`,
+        cats.map(c => { const list = STORE.filter(s => s.cat === c && match(s)); return list.length ? `<div class="section-label">${c}</div><div class="cards">${list.map(s => card(storeIcon(s), s.name, s.desc, `data-id="${s.id}"`,
           inst.includes(s.id) ? `<button data-open="${s.id}">Open</button><button class="icon-btn" data-rm="${s.id}" title="Uninstall">${glyph('trash', 15)}</button>` : `<button class="primary" data-add="${s.id}">Get</button>`)).join('')}</div>` : ''; }).join('') +
         '<div style="height:20px"></div>';
       const sq = body.querySelector('.sq'); sq.oninput = () => { q = sq.value.toLowerCase(); draw(); const n = body.querySelector('.sq'); n.focus(); n.setSelectionRange(99, 99); };
