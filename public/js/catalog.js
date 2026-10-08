@@ -187,6 +187,9 @@ APPS.recorder = ALL_APPS.recorder = { name: 'Recorder', icon: realIcon('obs'), c
       <span class="grow"></span><span class="rec-time small"></span><button class="primary" data-a="rec">${glyph('power', 14)}<span>Start recording</span></button></div>
     <div class="rec-stage"><canvas width="1280" height="720"></canvas><div class="rec-hint">Add your screen, a window or a tab, and/or your camera. Recordings are saved to Videos in Files.</div></div></div>`;
   const cv = body.querySelector('canvas'), x = cv.getContext('2d'), $r = s => body.querySelector(s);
+  // Live Chat can stream this composed scene (Go live → Recorder scene).
+  const scene = { cv, stream: () => cv.captureStream(30) }; window.RecorderScene = scene;
+  win.cleanup.push(() => { if (window.RecorderScene === scene) window.RecorderScene = null; });
   const src = { screen: null, cam: null }, vids = {}; let rec = null, chunks = [], t0 = 0, raf;
   const video = stream => { const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.srcObject = stream; v.play(); return v; };
   const drawFrame = () => {
@@ -234,4 +237,28 @@ APPS.recorder = ALL_APPS.recorder = { name: 'Recorder', icon: realIcon('obs'), c
     }
   };
   win.cleanup.push(() => { cancelAnimationFrame(raf); if (rec) rec.stop(); Object.values(src).forEach(s => s?.getTracks().forEach(t => t.stop())); });
+} };
+
+// ---- App Store (replaces the earlier one): categories, search, installed list ----
+APPS.store = ALL_APPS.store = { ...APPS.store, w: 1000, h: 680, run(body) {
+  let cat = 'All', q = '';
+  const draw = () => {
+    const inst = OS.cfg.installed || [], cats = ['All', 'Installed', ...new Set(STORE.map(s => s.cat))];
+    const count = c => c === 'All' ? STORE.length : c === 'Installed' ? inst.length : STORE.filter(s => s.cat === c).length;
+    const list = STORE.filter(s => (cat === 'All' || (cat === 'Installed' ? inst.includes(s.id) : s.cat === cat)) && (!q || `${s.name} ${s.desc} ${s.cat}`.toLowerCase().includes(q)));
+    body.innerHTML = `<div class="hub"><nav>${cats.map(c => `<button data-cat="${esc(c)}" class="${c === cat ? 'on' : ''}">${esc(c)}<span>${count(c)}</span></button>`).join('')}</nav>
+      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'App Store' : esc(cat)}</h3><p class="muted small">${list.length} apps · installed apps go on your desktop and open through the proxy browser</p></div>
+        <input class="hub-q" placeholder="Search apps" value="${esc(q)}"></div>
+      <div class="store-grid">${list.map(s => card(storeIcon(s), s.name, s.desc, `data-id="${s.id}"`,
+        inst.includes(s.id) ? `<button data-open="${s.id}">Open</button><button class="icon-btn" data-rm="${s.id}" title="Uninstall">${glyph('trash', 15)}</button>` : `<button class="primary" data-add="${s.id}">Get</button>`)).join('') || '<div class="empty">No apps match.</div>'}</div></section></div>`;
+    const qi = body.querySelector('.hub-q'); qi.oninput = () => { q = qi.value.toLowerCase(); draw(); const n = body.querySelector('.hub-q'); n.focus(); n.setSelectionRange(99, 99); };
+  };
+  body.onclick = e => {
+    const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; return draw(); }
+    const d = (e.target.closest('button') || {}).dataset || {}, inst = OS.cfg.installed || [];
+    if (d.add) { OS.set({ installed: [...inst, d.add] }); OS.syncApps(); OS.toast(STORE.find(s => s.id === d.add).name + ' was added to your desktop'); draw(); }
+    if (d.rm) { OS.set({ installed: inst.filter(i => i !== d.rm) }); OS.syncApps(); draw(); }
+    if (d.open) OS.launch('web:' + d.open);
+  };
+  draw();
 } };

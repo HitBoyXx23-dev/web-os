@@ -646,3 +646,26 @@ select option { background: var(--surface-2); color: var(--text); }
 .ss-note { color: #fca5a5; font-size: 13px; }
 .ss-say { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); width: min(420px, 90%); }
 .ss-say input { width: 100%; background: rgba(0, 0, 0, .75); color: #fff; border-color: rgba(255, 255, 255, .25); }
+
+/* Assistant */
+.ai { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.ai-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.ai-settings { padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.ai-settings p { margin: 0; }
+.ai-models { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.ai-models label { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; align-items: center; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+.ai-models small { grid-column: 2; color: var(--text-3); font-size: 11px; }
+.ai-log { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.ai-msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; line-height: 1.55; word-wrap: break-word; }
+.ai-msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-fg); border-bottom-right-radius: 4px; }
+.ai-msg.assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.ai-msg pre { background: rgba(0, 0, 0, .35); padding: 10px; border-radius: 8px; overflow: auto; margin: 6px 0; font: 12.5px/1.5 var(--mono); }
+.ai-msg code { font-family: var(--mono); font-size: .92em; }
+.ai-empty { margin: auto; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 520px; }
+.ai-empty h3 { margin: 6px 0 0; font-size: 20px; }
+.ai-empty p { margin: 0 0 10px; }
+.ai-ideas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: 100%; }
+.ai-ideas button { padding: 10px 12px; text-align: left; justify-content: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; white-space: normal; height: auto; }
+.ai-send { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); align-items: flex-end; }
+.ai-send textarea { flex: 1; resize: none; min-height: 38px; max-height: 160px; padding: 9px 12px; border-radius: 10px; font: inherit; background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); }
+.store-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; padding: 4px 20px 16px; align-content: start; }

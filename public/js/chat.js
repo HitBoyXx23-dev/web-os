@@ -113,8 +113,12 @@ APPS.chat = ALL_APPS.chat = { name: 'Live Chat', icon: realIcon('discord'), cat:
   };
   const goLive = async () => {
     try {
-      const pick = await new Promise(res => OS.menu($('#ctx-menu'), [['vm', 'Share screen, window or tab', () => res('screen')], ['media', 'Share camera', () => res('cam')]], ...(() => { const r = $c('[data-a=live]').getBoundingClientRect(); return [r.left - 120, r.bottom + 4]; })()));
-      myStream = pick === 'cam' ? await navigator.mediaDevices.getUserMedia({ video: true, audio: true }) : await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+      const opts = [['vm', 'Share screen, window or tab', 'screen'], ['media', 'Share camera', 'cam'], ...(window.RecorderScene ? [['paint', 'Share Recorder scene (screen + camera + text)', 'scene']] : [])];
+      const pick = await new Promise(res => OS.menu($('#ctx-menu'), opts.map(([g, n, k]) => [g, n, () => res(k)]), ...(() => { const r = $c('[data-a=live]').getBoundingClientRect(); return [r.left - 160, r.bottom + 4]; })()));
+      if (pick === 'scene') {
+        myStream = window.RecorderScene.stream();
+        try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getAudioTracks().forEach(t => myStream.addTrack(t)); } catch (e) {} // add the mic if allowed
+      } else myStream = pick === 'cam' ? await navigator.mediaDevices.getUserMedia({ video: true, audio: true }) : await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
     } catch (e) { myStream = null; return OS.toast('Sharing was cancelled or blocked.'); }
     myStream.getVideoTracks()[0].onended = () => stopLive();
     const t = tile_(conn.id, 'You — live'); t.querySelector('video').srcObject = myStream; t.querySelector('video').muted = true;
