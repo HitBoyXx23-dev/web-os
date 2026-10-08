@@ -7,6 +7,10 @@ const SS_COLORS = ['#f97316', '#22c55e', '#3b82f6', '#eab308', '#ec4899', '#a855
 const SS_SCRAP = [['Rubber Duck', 12, 1], ['Old Phone', 28, 1], ['Big Bolt', 18, 2], ['Air Horn', 30, 1], ['Cursed Teddy', 46, 2], ['Brass Bell', 40, 3],
   ['Golden Cup', 70, 3], ['Laser Pointer', 24, 1], ['Toy Robot', 38, 2], ['Fancy Lamp', 52, 4], ['Engine Part', 60, 5], ['Toilet Seat', 22, 2], ['Gift Box', 34, 2], ['Comedy Mask', 44, 1]];
 const SS_EMOTES = { 1: '👋', 2: '🕺', 3: '😱', 4: '👍' };
+// Each shift takes place in a different kind of facility.
+const SS_THEMES = [{ name: 'Factory', a: '#2a2b31', b: '#26272c', wall: '#3a3b43' }, { name: 'Old Mansion', a: '#3a2a22', b: '#33251e', wall: '#5a3e2b' },
+  { name: 'Ice Lab', a: '#22303a', b: '#1e2a33', wall: '#3c5566' }, { name: 'Swamp Works', a: '#24301f', b: '#202a1b', wall: '#3d4a2e' }];
+const ssTheme = lv => SS_THEMES[(lv - 1) % SS_THEMES.length];
 
 function ssRng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
@@ -33,7 +37,8 @@ function ssMap(seed, level) {
   rooms.slice(1).forEach(o => { const n = 2 + (r() * 3 | 0); for (let k = 0; k < n; k++) { const [name, v, wt] = SS_SCRAP[r() * SS_SCRAP.length | 0];
     scrap.push({ id: scrap.length, name, v: Math.round(v * (1 + level * .15) * (.8 + r() * .5)), wt, x: (o.x + .5 + r() * (o.w - 1)) * T, y: (o.y + .5 + r() * (o.h - 1)) * T, own: 0 }); } });
   const nm = Math.min(far.length, 2 + level);
-  for (let k = 0; k < nm; k++) { const o = far[k % Math.ceil(far.length / 2)]; monsters.push({ kind: k % 3 === 1 ? 'statue' : 'lurker', x: (o.x + o.w / 2) * T + k * 6, y: (o.y + o.h / 2) * T, a: 0, st: 'wander', tx: 0, ty: 0, tt: 0 }); }
+  for (let k = 0; k < nm; k++) { const o = far[k % Math.ceil(far.length / 2)]; const x = (o.x + o.w / 2) * T + k * 6, y = (o.y + o.h / 2) * T;
+    monsters.push({ kind: ['lurker', 'statue', 'hoarder'][k % 3], x, y, nx: x, ny: y, a: 0, st: 'wander', tx: 0, ty: 0, tt: 0, stun: 0, mad: 0 }); }
   return { tiles, rooms, ship: rooms[0], scrap, monsters };
 }
 function dist2(a, b) { return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2; }
@@ -70,25 +75,26 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   const toHost = m => { if (isHost()) hostMsg({ ...m, from: myId }); else send({ ...m, to: hostId }); };
   const newShift = (lv, q, keepSeed) => {
     const seed = keepSeed || (Math.random() * 1e9 | 0), map = ssMap(seed, lv);
-    W = { seed, lv, q, b: 0, tl: 150 + lv * 20, ph: 'play', map, msg: null, msgAt: 0 };
+    W = { seed, lv, q, b: 0, tl: 150 + lv * 20, ph: 'play', map, msg: null, msgAt: 0, stats: {} };
     spawn();
   };
   const spawn = () => { const s = W.map.ship, i = myId % 6; me.x = (s.x + 1.5 + i % 3) * SS.T; me.y = (s.y + 1.5 + (i / 3 | 0)) * SS.T; me.dead = false; me.stam = 1; };
-  const snapshot = () => ({ t: 'w', seed: W.seed, lv: W.lv, q: W.q, b: W.b, tl: Math.round(W.tl), ph: W.ph, msg: W.msg,
+  const snapshot = () => ({ t: 'w', seed: W.seed, lv: W.lv, q: W.q, b: W.b, tl: Math.round(W.tl), ph: W.ph, msg: W.msg, bd: W.ph === 'end' ? W.board : undefined,
     m: W.map.monsters.map(m => [Math.round(m.x), Math.round(m.y), m.kind, m.st, +m.a.toFixed(2)]), s: W.map.scrap.map(s => [s.own, Math.round(s.x), Math.round(s.y)]) });
   const applySnap = m => {
     if (!W || W.seed !== m.seed) { const fresh = !W || W.lv !== m.lv || W.ph !== m.ph; W = { seed: m.seed, lv: m.lv, map: ssMap(m.seed, m.lv) }; if (fresh) spawn(); }
-    Object.assign(W, { q: m.q, b: m.b, tl: m.tl, ph: m.ph, msg: m.msg });
+    Object.assign(W, { q: m.q, b: m.b, tl: m.tl, ph: m.ph, msg: m.msg, board: m.bd });
     m.m.forEach((v, i) => { const o = W.map.monsters[i]; if (o) { o.x = v[0]; o.y = v[1]; o.st = v[3]; o.a = v[4]; } });
     m.s.forEach((v, i) => { const o = W.map.scrap[i]; if (o) { o.own = v[0]; o.x = v[1]; o.y = v[2]; } });
   };
   // messages every client handles
   const onMsg = m => {
-    if (m.t === 'p') { const p = peers.get(m.from); if (p) Object.assign(p, { tx: m.x, ty: m.y, x: p.x ?? m.x, y: p.y ?? m.y, a: m.a, fl: m.fl, dead: m.dead, e: m.e, eAt: m.e && m.e !== p.e ? Date.now() : p.eAt, color: m.c, name: m.n }); return; }
+    if (m.t === 'p') { const p = peers.get(m.from); if (p) Object.assign(p, { tx: m.x, ty: m.y, x: p.x ?? m.x, y: p.y ?? m.y, a: m.a, fl: m.fl, dead: m.dead, e: m.e, eAt: m.e && m.e !== p.e ? Date.now() : p.eAt, color: m.c, name: m.n, swingAt: m.sw ? Date.now() : p.swingAt }); return; }
     if (m.t === 'w') { if (!isHost()) applySnap(m); return; }
     if (m.t === 'say') { const p = peers.get(m.from); if (p && (me.dead || Math.hypot(p.x - me.x, p.y - me.y) < 420)) { p.say = m.text; p.sayAt = Date.now(); say(`${p.name}: ${m.text}`); beep(660, .05, 'sine', .03); } return; }
     if (m.t === 'kill') { if (m.id === myId) { me.dead = true; beep(90, .6, 'sawtooth', .08); say('You died. Watch your friends until the shift ends.'); } else { const p = peers.get(m.id); if (p) say(`${p.name} was caught!`); } return; }
     if (m.t === 'scream') { const p = peers.get(m.from); if (p && Math.hypot(p.x - me.x, p.y - me.y) < 600) beep(880, .25, 'sawtooth', .04); }
+    if (m.t === 'shove') { if (m.id === myId) { me.push = { a: m.a, t: .22 }; beep(200, .1, 'square', .04); } return; }
     if (isHost()) hostMsg(m);
   };
   // requests only the host acts on
@@ -97,13 +103,26 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     const p = m.from === myId ? me : peers.get(m.from); if (!p || p.dead) return;
     if (m.t === 'pick') { const s = W.map.scrap[m.sid]; if (s && !s.own && Math.hypot(s.x - p.x, s.y - p.y) < 90 && W.map.scrap.filter(x => x.own === m.from).length < 4) s.own = m.from; }
     if (m.t === 'drop') W.map.scrap.filter(s => s.own === m.from).forEach((s, i) => { s.own = 0; s.x = p.x + (i % 2) * 14 - 7; s.y = p.y + (i >> 1) * 14; });
-    if (m.t === 'bank' && inShip(W.map, p)) W.map.scrap.filter(s => s.own === m.from).forEach(s => { s.own = -1; W.b += s.v; });
+    if (m.t === 'bank' && inShip(W.map, p)) W.map.scrap.filter(s => s.own === m.from).forEach(s => { s.own = -1; W.b += s.v; stat(m.from).v += s.v; });
+    if (m.t === 'hit') { // shovel: stuns lurkers and hoarders in front of you (statues don't care), shoves friends
+      for (const [i, mo] of W.map.monsters.entries()) {
+        const d = Math.hypot(mo.x - p.x, mo.y - p.y), da = Math.abs(((Math.atan2(mo.y - p.y, mo.x - p.x) - m.a + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        if (d > 58 || da > 1 || mo.kind === 'statue') continue;
+        mo.stun = 2.5; stat(m.from).hits++;
+        if (mo.kind === 'hoarder') { dropHoard(i, mo); mo.mad = 6; mo.foe = m.from; }
+      }
+      for (const q of players()) if (q.id !== m.from && !q.dead && Math.hypot(q.x - p.x, q.y - p.y) < 40) { const msg = { t: 'shove', id: q.id, a: m.a }; send(msg); if (q.id === myId) onMsg(msg); }
+    }
     if (m.t === 'leave' && inShip(W.map, p)) endShift();
     if (m.t === 'scream') W.noise = { x: p.x, y: p.y, at: Date.now() };
   };
+  const stat = id => { const p = id === myId ? me : peers.get(id); return W.stats[id] ||= { name: p?.name || 'Player', color: p?.color || '#999', v: 0, deaths: 0, hits: 0 }; };
+  const dropHoard = (i, mo) => W.map.scrap.filter(s => s.own === -10 - i).forEach((s, k) => { s.own = 0; s.x = mo.x + k * 9; s.y = mo.y + 8; });
   const endShift = () => {
+    players().forEach(p => stat(p.id));
+    W.board = Object.values(W.stats).sort((a, b) => b.v - a.v).map(x => [x.name, x.color, x.v, x.deaths, x.hits]);
     const ok = W.b >= W.q; W.ph = 'end'; W.msg = ok ? `Quota met! $${W.b} / $${W.q} — next shift starting…` : `FIRED. You brought back $${W.b} of $${W.q}. Starting over…`;
-    setTimeout(() => { if (!running || !isHost()) return; ok ? newShift(W.lv + 1, Math.round(W.q * 1.45 + 60)) : newShift(1, 150); }, 6000);
+    setTimeout(() => { if (!running || !isHost()) return; ok ? newShift(W.lv + 1, Math.round(W.q * 1.45 + 60)) : newShift(1, 150); }, 8000);
   };
 
   // ---- host simulation ----
@@ -114,7 +133,11 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     const alive = players().filter(p => !p.dead && p.x !== undefined);
     if (W.tl <= 0 || !alive.length) { if (!alive.length) W.b = W.map.scrap.filter(s => s.own === -1).reduce((n, s) => n + s.v, 0); return endShift(); }
     const map = W.map, T = SS.T;
-    for (const m of W.map.monsters) {
+    for (const [mi, m] of W.map.monsters.entries()) {
+      const hoard = W.map.scrap.filter(s => s.own === -10 - mi);
+      hoard.forEach((s, k) => { s.x = m.x + (k - hoard.length / 2) * 7; s.y = m.y - 14; });
+      if (m.stun > 0) { m.stun -= dt; m.st = 'stunned'; continue; }
+      if (m.kind === 'hoarder') { hoarderTick(m, mi, hoard, alive, dt); continue; }
       const seen = alive.filter(p => ssSees(map, m, p, m.kind === 'statue' ? 620 : 300)).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
       const watched = m.kind === 'statue' && alive.some(p => lit(p, m, map));
       let speed = 60, tx = m.tx, ty = m.ty;
@@ -122,23 +145,47 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       if (seen) { m.st = 'chase'; tx = seen.x; ty = seen.y; speed = m.kind === 'statue' ? 210 : 128; }
       else if (W.noise && Date.now() - W.noise.at < 6000 && m.kind === 'lurker') { m.st = 'hunt'; tx = W.noise.x; ty = W.noise.y; speed = 100; }
       else { m.st = 'wander'; if ((m.tt -= dt) <= 0 || Math.hypot(tx - m.x, ty - m.y) < 20) { const o = map.rooms[1 + (Math.random() * (map.rooms.length - 1) | 0)]; m.tx = (o.x + o.w / 2) * T; m.ty = (o.y + o.h / 2) * T; m.tt = 8; } tx = m.tx; ty = m.ty; }
-      // follow a breadth-first "flow" toward the target so monsters go around walls
-      let gx = tx, gy = ty;
-      if (!ssSees(map, m, { x: tx, y: ty })) {
-        const key = (tx / T | 0) + ',' + (ty / T | 0);
-        if (!flow || flow.key !== key || Date.now() - flowAt > 700) { flow = bfs(map, tx / T | 0, ty / T | 0); flow.key = key; flowAt = Date.now(); }
-        const cx0 = m.x / T | 0, cy0 = m.y / T | 0; let best = flow.d[cy0 * SS.W + cx0], bx = cx0, by = cy0;
-        for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = flow.d[(cy0 + oy) * SS.W + cx0 + ox]; if (v >= 0 && v < best) { best = v; bx = cx0 + ox; by = cy0 + oy; } }
-        gx = (bx + .5) * T; gy = (by + .5) * T;
-      }
-      const a = Math.atan2(gy - m.y, gx - m.x); m.a = a;
-      ssMove(map, m, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, 10);
+      steer(m, tx, ty, speed, dt);
       for (const p of alive) if (Math.hypot(p.x - m.x, p.y - m.y) < 22) kill(p.id === undefined ? myId : p.id);
     }
   };
+  // Move toward (tx, ty), following a breadth-first "flow" around walls when there's no straight line.
+  const steer = (m, tx, ty, speed, dt) => {
+    const map = W.map, T = SS.T; let gx = tx, gy = ty;
+    if (!ssSees(map, m, { x: tx, y: ty })) {
+      const key = (tx / T | 0) + ',' + (ty / T | 0);
+      if (!flow || flow.key !== key || Date.now() - flowAt > 700) { flow = bfs(map, tx / T | 0, ty / T | 0); flow.key = key; flowAt = Date.now(); }
+      const cx0 = m.x / T | 0, cy0 = m.y / T | 0; let best = flow.d[cy0 * SS.W + cx0], bx = cx0, by = cy0;
+      for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const v = flow.d[(cy0 + oy) * SS.W + cx0 + ox]; if (v >= 0 && v < best) { best = v; bx = cx0 + ox; by = cy0 + oy; } }
+      gx = (bx + .5) * T; gy = (by + .5) * T;
+    }
+    const a = Math.atan2(gy - m.y, gx - m.x); m.a = a;
+    ssMove(map, m, Math.cos(a) * speed * dt, Math.sin(a) * speed * dt, 10);
+  };
+  // Hoarder: collects loose scrap and carries it back to its nest. Harmless — until you hit it or get near its nest.
+  const hoarderTick = (m, mi, hoard, alive, dt) => {
+    const map = W.map, T = SS.T;
+    const intruder = alive.find(p => Math.hypot(p.x - m.nx, p.y - m.ny) < 110 && ssSees(map, m, p, 260));
+    if (intruder && m.mad <= 0) { m.mad = 4; m.foe = intruder.id; }
+    if (m.mad > 0) {
+      m.mad -= dt; m.st = 'angry';
+      const foe = alive.find(p => p.id === m.foe) || alive[0];
+      if (foe) { steer(m, foe.x, foe.y, 150, dt); if (Math.hypot(foe.x - m.x, foe.y - m.y) < 22) { kill(foe.id); m.mad = 0; } }
+      return;
+    }
+    if (hoard.length >= 2 || (hoard.length && !map.scrap.some(s => s.own === 0))) { // home with the loot
+      m.st = 'home'; steer(m, m.nx, m.ny, 95, dt);
+      if (Math.hypot(m.nx - m.x, m.ny - m.y) < 14) hoard.forEach((s, k) => { s.own = 0; s.x = m.nx + (k % 3) * 12 - 12; s.y = m.ny + 16 + (k / 3 | 0) * 10; });
+      return;
+    }
+    const loot = map.scrap.filter(s => s.own === 0 && Math.hypot(s.x - m.nx, s.y - m.ny) > 60 && Math.hypot(s.x - m.x, s.y - m.y) < 520).sort((a, b) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(b.x - m.x, b.y - m.y))[0];
+    if (loot) { m.st = 'seek'; steer(m, loot.x, loot.y, 95, dt); if (Math.hypot(loot.x - m.x, loot.y - m.y) < 16) loot.own = -10 - mi; return; }
+    m.st = 'wander'; if ((m.tt -= dt) <= 0) { const o = map.rooms[1 + (Math.random() * (map.rooms.length - 1) | 0)]; m.tx = (o.x + o.w / 2) * T; m.ty = (o.y + o.h / 2) * T; m.tt = 8; }
+    steer(m, m.tx, m.ty, 70, dt);
+  };
   const kill = id => {
     const p = id === myId ? me : peers.get(id); if (!p || p.dead) return;
-    p.dead = true; W.map.scrap.filter(s => s.own === id).forEach((s, i) => { s.own = 0; s.x = p.x + i * 10; s.y = p.y; });
+    p.dead = true; stat(id).deaths++; W.map.scrap.filter(s => s.own === id).forEach((s, i) => { s.own = 0; s.x = p.x + i * 10; s.y = p.y; });
     send({ t: 'kill', id }); onMsg({ t: 'kill', id, from: myId });
   };
   function bfs(map, sx, sy) {
@@ -159,6 +206,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     if (k === 'e') { const near = W.map.scrap.filter(s => !s.own).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
       if (near && Math.hypot(near.x - me.x, near.y - me.y) < 46) { toHost({ t: 'pick', sid: near.id }); beep(990, .08, 'triangle'); } }
     if (k === 'q') toHost({ t: 'drop' });
+    if (k === ' ' && performance.now() - (me.swingAt || 0) > 700) { me.swingAt = performance.now(); toHost({ t: 'hit', a: me.a }); beep(320, .08, 'triangle', .04); }
     if (k === 'f') { me.fl = !me.fl; beep(me.fl ? 1200 : 500, .04, 'square', .03); }
     if (k === 'l') toHost({ t: 'leave' });
     if (k === 't' || k === 'enter') { e.preventDefault(); sayF.classList.remove('hidden'); sayI.focus(); }
@@ -184,10 +232,14 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       if (mx || my) { const l = Math.hypot(mx, my); ssMove(W.map, me, mx / l * sp * dt, my / l * sp * dt); if (!mouse) me.a = Math.atan2(my, mx); }
       if (mouse) me.a = Math.atan2(mouse[1] - cv.clientHeight / 2, mouse[0] - cv.clientWidth / 2);
       if (carry.length && inShip(W.map, me) && now - (me.bankAt || 0) > 400) { me.bankAt = now; toHost({ t: 'bank' }); beep(1320, .1, 'triangle'); }
+      if (me.push && me.push.t > 0) { me.push.t -= dt; ssMove(W.map, me, Math.cos(me.push.a) * 320 * dt, Math.sin(me.push.a) * 320 * dt); }
+      // heartbeat when something is coming for you
+      const threat = W.map.monsters.filter(m => (m.st === 'chase' || m.st === 'angry') && !m.stun).map(m => Math.hypot(m.x - me.x, m.y - me.y)).sort((a, b) => a - b)[0];
+      if (threat < 340 && now - (me.beatAt || 0) > 350 + threat * 2) { me.beatAt = now; beep(55, .12, 'sine', .12); setTimeout(() => beep(48, .1, 'sine', .09), 140); }
     }
     for (const p of peers.values()) if (p.tx !== undefined) { p.x += (p.tx - p.x) * Math.min(1, dt * 12); p.y += (p.ty - p.y) * Math.min(1, dt * 12); }
     if (isHost()) { hostTick(dt); if (W && now - worldAt > 100) { worldAt = now; send(snapshot()); } }
-    if (W && now - sendAt > 66) { sendAt = now; send({ t: 'p', x: Math.round(me.x), y: Math.round(me.y), a: +me.a.toFixed(2), fl: me.fl, dead: me.dead, e: me.e, c: me.color, n: me.name }); }
+    if (W && now - sendAt > 66) { sendAt = now; send({ t: 'p', x: Math.round(me.x), y: Math.round(me.y), a: +me.a.toFixed(2), fl: me.fl, dead: me.dead, e: me.e, c: me.color, n: me.name, sw: now - (me.swingAt || 0) < 200 ? 1 : 0 }); }
     draw(now);
     raf = requestAnimationFrame(frame);
   };
@@ -198,7 +250,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     if (cv.width !== w * dpr || cv.height !== h * dpr) { cv.width = dark.width = w * dpr; cv.height = dark.height = h * dpr; }
     cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.fillStyle = '#07070a'; cx.fillRect(0, 0, w, h);
     if (!W) return;
-    const map = W.map, T = SS.T;
+    const map = W.map, T = SS.T, th = ssTheme(W.lv);
     const alivePeers = [...peers.values()].filter(p => !p.dead && p.x !== undefined);
     const cam = me.dead && alivePeers.length ? alivePeers[0] : me;
     const ox = Math.round(w / 2 - cam.x), oy = Math.round(h / 2 - cam.y);
@@ -206,16 +258,21 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     const x0 = Math.max(0, (-ox / T | 0) - 1), y0 = Math.max(0, (-oy / T | 0) - 1), x1 = Math.min(SS.W, x0 + (w / T | 0) + 3), y1 = Math.min(SS.H, y0 + (h / T | 0) + 3);
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const f = map.tiles[y * SS.W + x], s = map.ship, ship = x >= s.x && x < s.x + s.w && y >= s.y && y < s.y + s.h;
-      if (f) { cx.fillStyle = ship ? ((x + y) % 2 ? '#1f3a2c' : '#1c3528') : ((x + y) % 2 ? '#2a2b31' : '#26272c'); cx.fillRect(x * T, y * T, T, T); }
-      else if (map.tiles[(y + 1) * SS.W + x]) { cx.fillStyle = '#3a3b43'; cx.fillRect(x * T, y * T + T - 8, T, 8); }
+      if (f) { cx.fillStyle = ship ? ((x + y) % 2 ? '#1f3a2c' : '#1c3528') : ((x + y) % 2 ? th.a : th.b); cx.fillRect(x * T, y * T, T, T); }
+      else if (map.tiles[(y + 1) * SS.W + x]) { cx.fillStyle = th.wall; cx.fillRect(x * T, y * T + T - 8, T, 8); }
     }
     const s = map.ship; cx.fillStyle = 'rgba(74,222,128,.5)'; cx.font = '700 22px Inter, sans-serif'; cx.textAlign = 'center'; cx.fillText('SHIP', (s.x + s.w / 2) * T, (s.y + s.h / 2) * T + 8);
-    for (const it of map.scrap) if (!it.own) { cx.fillStyle = '#facc15'; cx.beginPath(); cx.arc(it.x, it.y, 5 + it.wt, 0, 7); cx.fill(); cx.fillStyle = 'rgba(255,255,255,.7)'; cx.fillRect(it.x - 2, it.y - 5 - it.wt, 2, 2); }
+    for (const it of map.scrap) if (!it.own || it.own <= -10) { cx.fillStyle = '#facc15'; cx.beginPath(); cx.arc(it.x, it.y, 5 + it.wt, 0, 7); cx.fill(); cx.fillStyle = 'rgba(255,255,255,.7)'; cx.fillRect(it.x - 2, it.y - 5 - it.wt, 2, 2); }
     for (const m of map.monsters) {
       if (!ssSees(map, cam, m, 700)) continue;
       if (m.kind === 'lurker') { cx.fillStyle = '#5b0f14'; cx.beginPath(); cx.arc(m.x, m.y, 15, 0, 7); cx.fill(); cx.fillStyle = m.st === 'chase' ? '#ff3b3b' : '#fca5a5'; for (const k of [-1, 1]) { cx.beginPath(); cx.arc(m.x + Math.cos(m.a + k * .5) * 8, m.y + Math.sin(m.a + k * .5) * 8, 2.5, 0, 7); cx.fill(); } }
+      else if (m.kind === 'hoarder') { // bug-like scrap thief: green, turns red when angry
+        cx.fillStyle = m.st === 'angry' ? '#b91c1c' : '#4d7c0f'; cx.beginPath(); cx.ellipse(m.x, m.y, 14, 10, m.a, 0, 7); cx.fill();
+        cx.strokeStyle = cx.fillStyle; cx.lineWidth = 2; for (const k of [-1, 0, 1]) for (const sd of [-1, 1]) { cx.beginPath(); cx.moveTo(m.x + k * 6, m.y); cx.lineTo(m.x + k * 8 + Math.cos(m.a + sd * 1.6) * 14, m.y + Math.sin(m.a + sd * 1.6) * 14); cx.stroke(); }
+        cx.fillStyle = '#fef08a'; cx.beginPath(); cx.arc(m.x + Math.cos(m.a) * 10, m.y + Math.sin(m.a) * 10, 2.5, 0, 7); cx.fill(); }
       else { cx.fillStyle = '#d6d3d1'; cx.fillRect(m.x - 8, m.y - 16, 16, 30); cx.beginPath(); cx.arc(m.x, m.y - 20, 8, 0, 7); cx.fill(); cx.fillStyle = '#18181b'; cx.fillRect(m.x - 4, m.y - 22, 2, 2); cx.fillRect(m.x + 2, m.y - 22, 2, 2); }
     }
+    for (const m of map.monsters) if (m.st === 'stunned' && ssSees(map, cam, m, 700)) { cx.fillStyle = '#fde047'; cx.font = '12px sans-serif'; cx.textAlign = 'center'; cx.fillText('✦ ✧ ✦', m.x, m.y - 22 - Math.sin(now / 120) * 2); }
     const all = players();
     for (const p of all) if (p.x !== undefined) drawPlayer(p, now);
     cx.restore();
@@ -244,6 +301,8 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     cx.fillStyle = p.color || '#999'; cx.beginPath(); cx.arc(0, 0, 12, 0, 7); cx.fill();
     cx.fillStyle = 'rgba(0,0,0,.35)'; cx.fillRect(-12, -3, 24, 4); // suit belt
     const a = p.a || 0; cx.fillStyle = '#dbeafe'; cx.beginPath(); cx.ellipse(Math.cos(a) * 6, Math.sin(a) * 6, 6, 4, a, 0, 7); cx.fill(); // visor
+    const sw = p.swingAt && now - p.swingAt < 220; // shovel swing
+    if (sw && !p.dead) { cx.strokeStyle = '#d4d4d8'; cx.lineWidth = 4; cx.lineCap = 'round'; const t = (now - p.swingAt) / 220, ang = a - .9 + t * 1.8; cx.beginPath(); cx.moveTo(Math.cos(ang) * 10, Math.sin(ang) * 10); cx.lineTo(Math.cos(ang) * 34, Math.sin(ang) * 34); cx.stroke(); }
     const carry = W.map.scrap.filter(s => s.own === p.id || (p === me && s.own === myId)).length;
     for (let i = 0; i < carry; i++) { cx.fillStyle = '#facc15'; cx.fillRect(-10 + i * 6, 13, 5, 5); }
     cx.restore();
@@ -256,8 +315,8 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   const hud = (now, w, h) => {
     const T = SS.T;
     cx.textAlign = 'left'; cx.font = '600 14px Inter, sans-serif';
-    cx.fillStyle = 'rgba(0,0,0,.55)'; cx.beginPath(); cx.roundRect(12, 12, 250, 70, 10); cx.fill();
-    cx.fillStyle = '#fff'; cx.fillText(`Shift ${W.lv}  ·  ${Math.floor(Math.max(0, W.tl) / 60)}:${String(Math.max(0, W.tl | 0) % 60).padStart(2, '0')} left`, 24, 34);
+    cx.fillStyle = 'rgba(0,0,0,.55)'; cx.beginPath(); cx.roundRect(12, 12, 300, 70, 10); cx.fill();
+    cx.fillStyle = '#fff'; cx.fillText(`Shift ${W.lv} · ${ssTheme(W.lv).name} · ${Math.floor(Math.max(0, W.tl) / 60)}:${String(Math.max(0, W.tl | 0) % 60).padStart(2, '0')} left`, 24, 34);
     cx.fillStyle = 'rgba(255,255,255,.15)'; cx.fillRect(24, 46, 226, 8); cx.fillStyle = W.b >= W.q ? '#4ade80' : '#facc15'; cx.fillRect(24, 46, 226 * Math.min(1, W.b / W.q), 8);
     cx.fillStyle = '#d4d4d8'; cx.font = '12px Inter, sans-serif'; cx.fillText(`Quota $${W.b} / $${W.q}`, 24, 72);
     const carry = W.map.scrap.filter(s => s.own === myId);
@@ -270,9 +329,20 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     if (near) { cx.fillStyle = '#fff'; cx.fillText(`[E] Pick up ${near.name} ($${near.v})`, w / 2, h / 2 + 44); }
     else if (inShip(W.map, me) && W.ph === 'play' && !me.dead) { cx.fillStyle = 'rgba(255,255,255,.7)'; cx.fillText('In the ship: scrap is banked automatically · [L] leave early', w / 2, h - 34); }
     cx.textAlign = 'right'; cx.fillStyle = 'rgba(255,255,255,.55)'; cx.font = '12px Inter, sans-serif';
-    cx.fillText('WASD move · Shift sprint · mouse aim · E pick up · Q drop · F light · T talk · 1-4 emotes', w - 14, h - 12);
+    cx.fillText('WASD move · Shift sprint · mouse aim · Space swing', w - 14, 26); cx.fillText('E pick up · Q drop · F light · T talk · 1-4 emotes', w - 14, 44);
     cx.textAlign = 'left'; log.filter(l => now - l.at < 9000).forEach((l, i, arr) => { cx.fillStyle = 'rgba(255,255,255,.85)'; cx.fillText(l.text, 14, h - 16 - (arr.length - 1 - i) * 18); });
-    if (W.msg && W.ph === 'end') { cx.fillStyle = 'rgba(0,0,0,.7)'; cx.fillRect(0, h / 2 - 40, w, 80); cx.fillStyle = W.msg.startsWith('FIRED') ? '#f87171' : '#4ade80'; cx.font = '700 22px Inter, sans-serif'; cx.textAlign = 'center'; cx.fillText(W.msg, w / 2, h / 2 + 8); }
+    if (W.msg && W.ph === 'end') {
+      const rows = W.board || [], bh = 90 + rows.length * 26;
+      cx.fillStyle = 'rgba(0,0,0,.78)'; cx.fillRect(0, h / 2 - bh / 2, w, bh);
+      cx.fillStyle = W.msg.startsWith('FIRED') ? '#f87171' : '#4ade80'; cx.font = '700 22px Inter, sans-serif'; cx.textAlign = 'center'; cx.fillText(W.msg, w / 2, h / 2 - bh / 2 + 38);
+      cx.font = '13px Inter, sans-serif';
+      rows.forEach(([name, color, v, deaths, hits], i) => {
+        const y = h / 2 - bh / 2 + 72 + i * 26;
+        cx.textAlign = 'left'; cx.fillStyle = color; cx.beginPath(); cx.arc(w / 2 - 170, y - 4, 6, 0, 7); cx.fill();
+        cx.fillStyle = '#fff'; cx.fillText(`${i === 0 && v ? '🏆 ' : ''}${name}`, w / 2 - 156, y);
+        cx.textAlign = 'right'; cx.fillStyle = '#d4d4d8'; cx.fillText(`$${v} banked · ${hits} bonk${hits === 1 ? '' : 's'} · ${deaths ? deaths + ' death' + (deaths > 1 ? 's' : '') : 'survived'}`, w / 2 + 190, y);
+      });
+    }
   };
 
   // ---- lobby ----
