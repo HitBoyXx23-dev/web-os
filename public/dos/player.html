@@ -14,6 +14,8 @@
 <script src="https://cdn.jsdelivr.net/npm/js-dos@8.5.3/dist/js-dos.js" onerror="document.getElementById('msg').textContent = 'Could not load the DOS emulator. Check your connection and try again.'"></script>
 <script>
   // Runs one js-dos bundle from this folder: player.html?game=doom
+  // Right-click is a game control (Doom fires with it), so keep the browser menu out of the way.
+  addEventListener('contextmenu', e => e.preventDefault());
   const game = new URLSearchParams(location.search).get('game');
   if (window.Dos && /^[a-z0-9]+$/.test(game || '')) {
     document.getElementById('msg').remove();
