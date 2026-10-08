@@ -750,3 +750,23 @@ select option { background: var(--surface-2); color: var(--text); }
 .dd-guess { padding: 8px; border-top: 1px solid var(--line); }
 .dd-guess input { width: 100%; }
 @media (max-width: 760px) { .dd-players { width: 120px; } .dd-side { width: 180px; } }
+
+/* Code Studio */
+.code { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.code .toolbar { gap: 6px; flex-wrap: wrap; }
+.cs-main { flex: 1; min-height: 0; display: flex; }
+.cs-editor { flex: 1.2; min-width: 0; display: flex; border-right: 1px solid var(--line); }
+.cs-editor textarea { flex: 1; resize: none; border: 0; border-radius: 0; padding: 12px; font: 13px/1.55 var(--mono); background: var(--surface); color: var(--text); }
+.cs-editor .CodeMirror { flex: 1; height: 100%; font: 13px/1.55 var(--mono); }
+.cs-out { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #0b0c0f; }
+:root[data-theme=light] .cs-out { background: #fafafa; }
+.cs-out-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.cs-console { flex: 1; margin: 0; padding: 10px 12px; overflow: auto; font: 12.5px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; color: var(--text); }
+.cs-console .err { color: #f87171; }
+.cs-console .info { color: #60a5fa; }
+.cs-preview { flex: 1; border: 0; background: #fff; }
+.cs-tables { flex: 1; overflow: auto; padding: 12px; }
+.cs-tables table { border-collapse: collapse; font: 12.5px var(--mono); margin-bottom: 4px; }
+.cs-tables th, .cs-tables td { border: 1px solid var(--line-2); padding: 4px 10px; text-align: left; }
+.cs-tables th { background: var(--surface-3); }
+@media (max-width: 700px) { .cs-main { flex-direction: column; } .cs-editor { border-right: 0; border-bottom: 1px solid var(--line); } }

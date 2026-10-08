@@ -153,6 +153,7 @@ const APPS = {
     const menu = (p, x, y) => {
       const isDir = FS.isDir(p), items = [['open', 'Open', () => open(p)]];
       if (!isDir && runnersFor(p).length) items.push(['forward', 'Run…', () => open(p, 'run')]);
+      if (!isDir && /\.(py|js|mjs|ts|lua|sql|html?)$/i.test(p)) items.push(['terminal', 'Open in Code Studio', () => open(p, 'code')]);
       if (!isDir) items.push(['notepad', 'Open with Text Editor', () => open(p, 'notepad')], ['paint', 'Open with Image Viewer', () => open(p, 'viewer')], ['media', 'Open with Videos', () => open(p, 'media')], ['download', 'Download', () => download(p)]);
       items.push('-', ['notepad', 'Rename…', () => rename(p)], ['trash', 'Delete', () => remove(p)]);
       OS.menu($('#ctx-menu'), items, x, y);
