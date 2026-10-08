@@ -341,6 +341,8 @@ const APPS = {
         ${row('Use proxy in Browser', 'Routes pages through the proxy so blocked sites can load', `<div class="seg">${['on', 'off'].map(v => `<button data-proxy="${v}" class="${(c.proxy !== false) === (v === 'on') ? 'on' : ''}">${v === 'on' ? 'On' : 'Off'}</button>`).join('')}</div>`)}
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Wisp server</span><small>Leave blank to pick automatically: this site's own server if it has one (<code>npm start</code>), otherwise a public server.</small></div>
         <div class="row"><input class="ws grow" placeholder="Automatic" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
+        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Live server</span><small>For Live Chat, streams and multiplayer games. Leave blank to use this site. On Vercel, enter the address of a HitBoy Web-OS server (for example <code>wss://your-app.onrender.com</code>).</small></div>
+        <div class="row"><input class="pss grow" placeholder="This site" value="${esc(c.partyServer || '')}"><button class="primary psb">Save</button></div></div>
         <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>`;
       if (page === 'privacy') html = `<h3>Privacy</h3>
         ${row('Tab disguise', 'Changes the browser tab title and icon', `<select class="ck">${Object.keys(CLOAKS).map(k => `<option ${(c.cloak || 'None') === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`)}
@@ -382,6 +384,7 @@ const APPS = {
         await Users.setPassword(OS.user, a); OS.account = Users.get(OS.user); OS.toast(a ? 'Password changed' : 'Password removed');
       }
       if (b.classList.contains('ib')) { const u = body.querySelector('.iu').value.trim(); if (u) OS.set({ wall: `url("${u.replace(/["\\]/g, '')}") center/cover` }); }
+      if (b.classList.contains('psb')) { OS.set({ partyServer: body.querySelector('.pss').value.trim() }); OS.toast('Live server saved'); }
       if (b.classList.contains('wb')) { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await WebProxy.ready(); await WebProxy.setTransport(); OS.toast('Proxy server saved'); } catch (err) { OS.toast(err.message); } }
       if (b.classList.contains('blank')) OS.openBlank(location.href);
       if (b.classList.contains('pb')) { OS.set({ panicKey: body.querySelector('.pk').value, panicUrl: body.querySelector('.pu').value.trim() }); OS.toast('Panic key saved'); }

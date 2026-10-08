@@ -594,3 +594,55 @@ canvas { display: block; max-width: 100%; }
 body.dragging-app, body.dragging-app * { user-select: none; cursor: grabbing !important; }
 /* Dropdown lists: readable in both themes (the opened list doesn't inherit the select's colors) */
 select option { background: var(--surface-2); color: var(--text); }
+
+/* Live Chat */
+.chat { display: flex; height: 100%; min-height: 0; }
+.chat aside { width: 220px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--surface); overflow: auto; }
+.chat-me { display: flex; align-items: center; gap: 10px; padding: 14px 14px 6px; }
+.chat-me b { display: block; font-weight: 600; }
+.chat-me small { color: var(--text-3); font-size: 12px; }
+.chat-rooms { display: flex; flex-direction: column; padding: 0 8px; gap: 1px; }
+.chat-rooms button { justify-content: flex-start; text-align: left; padding: 6px 10px; border-radius: 6px; background: none; border: 0; color: var(--text-2); }
+.chat-rooms button:hover { background: var(--hover); color: var(--text); }
+.chat-rooms button.on { background: var(--press); color: var(--text); font-weight: 500; }
+.chat-newroom { padding: 6px 12px; gap: 4px; }
+.chat-newroom input { min-width: 0; flex: 1; }
+.chat-people { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.chat-person { display: flex; align-items: center; gap: 8px; }
+.chat-live { margin-left: auto; padding: 1px 6px; font-size: 10px; font-weight: 700; letter-spacing: .04em; background: #dc2626; color: #fff; border: 0; border-radius: 4px; }
+.chat section { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.chat-streams { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; padding: 8px; background: #000; max-height: 55%; overflow: auto; }
+.chat-stream { position: relative; border-radius: 8px; overflow: hidden; background: #111; aspect-ratio: 16 / 9; }
+.chat-stream video { width: 100%; height: 100%; object-fit: contain; }
+.chat-stream span { position: absolute; left: 8px; bottom: 6px; font-size: 12px; color: #fff; text-shadow: 0 1px 2px #000; }
+.chat-stream .icon-btn { position: absolute; top: 4px; right: 4px; color: #fff; }
+.chat-log { flex: 1; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+.chat-msg div { display: flex; gap: 8px; align-items: baseline; }
+.chat-msg b { font-weight: 600; font-size: 13px; }
+.chat-msg.mine b { color: var(--accent); }
+.chat-msg small { color: var(--text-3); font-size: 11px; }
+.chat-msg p { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; }
+.chat-sys { color: var(--text-3); font-size: 12px; text-align: center; }
+.chat-send { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+.chat-send input { flex: 1; }
+@media (max-width: 640px) { .chat aside { width: 150px; } }
+
+/* Scrap Shift */
+.ss { position: relative; width: 100%; height: 100%; background: #07070a; }
+.ss canvas { width: 100%; height: 100%; display: block; }
+.ss-ui:empty { display: none; }
+.ss-ui { position: absolute; inset: 0; display: grid; place-items: center; background: radial-gradient(ellipse at center, rgba(194, 65, 12, .25), rgba(0, 0, 0, .85)); }
+.ss-lobby { width: min(380px, 92%); display: flex; flex-direction: column; gap: 12px; padding: 24px; border-radius: 14px; background: rgba(20, 20, 24, .92); border: 1px solid rgba(255, 255, 255, .1); color: #fff; }
+.ss-lobby h2 { margin: 0; font-size: 24px; }
+.ss-lobby p { margin: 0; }
+.ss-lobby .row { gap: 8px; }
+.ss-colors { display: flex; gap: 8px; }
+.ss-colors button { width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; padding: 0; }
+.ss-colors button.on { border-color: #fff; }
+.ss-players { display: flex; flex-direction: column; gap: 6px; }
+.ss-players div { display: flex; align-items: center; gap: 8px; }
+.ss-players i { width: 12px; height: 12px; border-radius: 50%; }
+.ss-note { color: #fca5a5; font-size: 13px; }
+.ss-say { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); width: min(420px, 90%); }
+.ss-say input { width: 100%; background: rgba(0, 0, 0, .75); color: #fff; border-color: rgba(255, 255, 255, .25); }

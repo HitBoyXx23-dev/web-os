@@ -1,10 +1,12 @@
-// HitBoy Web-OS server: serves the OS from public/ and runs a Wisp server so the proxy browser works out of the box.
+// HitBoy Web-OS server: serves the OS from public/, runs a Wisp server so the proxy browser works out of the box,
+// and a party server (party.js) for live chat, streams and multiplayer games.
 // Use this on hosts with WebSocket support (Render, Railway, Fly.io, a VPS…). Vercel serves public/ statically
 // (see vercel.json) and the proxy falls back to a public Wisp server there.
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { server as wisp } from '@mercuryworkshop/wisp-js/server';
+import { handleParty } from './party.js';
 
 const app = express();
 // Ubuntu 24.04 (container2wasm) needs SharedArrayBuffer, i.e. a cross-origin isolated page.
@@ -18,6 +20,7 @@ app.use(express.static(fileURLToPath(new URL('./public', import.meta.url)), { ex
 const server = createServer(app);
 server.on('upgrade', (req, socket, head) => {
   if (req.url.endsWith('/wisp/')) wisp.routeRequest(req, socket, head);
+  else if (req.url.startsWith('/party/')) handleParty(req, socket, head); // live chat, streams, multiplayer
   else socket.end();
 });
 
