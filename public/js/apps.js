@@ -47,12 +47,12 @@ const APPS = {
     body.innerHTML = `<div class="app-head"><h3>Virtual PC</h3><p>Boot a real operating system inside an emulated x86 PC, powered by the open-source v86 emulator. The first boot downloads the disk image and can take a minute.</p></div>
       <div class="section-label">Choose a system</div>
       <div class="cards" style="padding-bottom:20px">${VM_PROFILES.map(p => card({ mono: p.mono, bg: p.bg }, p.name, p.note, `data-id="${p.id}"`)).join('')}</div>`;
-    body.onclick = e => {
-      const c = e.target.closest('.card'); if (!c) return;
-      const p = VM_PROFILES.find(v => v.id === c.dataset.id);
-      const w = WM.open({ title: p.name, icon: { mono: p.mono, bg: p.bg }, w: 1060, h: 820, content: frame('https://copy.sh/v86/?profile=' + p.id) });
-      WM.toggleMax(w, true);
-    };
+    body.onclick = e => { const c = e.target.closest('.card'); if (c) this.boot(c.dataset.id); };
+  },
+  boot(id) {
+    const p = VM_PROFILES.find(v => v.id === id);
+    const w = WM.open({ title: p.name, icon: { mono: p.mono, bg: p.bg }, w: 1060, h: 820, content: frame('https://copy.sh/v86/?profile=' + p.id) });
+    WM.toggleMax(w, true);
   } },
 
   notepad: { name: 'Notepad', icon: 'notepad', cat: 'Apps', w: 620, h: 460, run(body, win, path) {
@@ -217,7 +217,7 @@ const APPS = {
   } },
 
   settings: { name: 'Settings', icon: 'settings', cat: 'System', w: 760, h: 540, run(body, win, page = 'appearance') {
-    const pages = { appearance: ['paint', 'Appearance'], proxy: ['shield', 'Proxy'], privacy: ['lock', 'Privacy'], system: ['about', 'System'] };
+    const pages = { appearance: ['paint', 'Appearance'], users: ['user', 'Users'], proxy: ['shield', 'Proxy'], privacy: ['lock', 'Privacy'], system: ['settings', 'System'] };
     const row = (l, s, ctl) => `<div class="set-row"><div class="l"><span>${l}</span>${s ? `<small>${s}</small>` : ''}</div>${ctl}</div>`;
     const draw = () => {
       const c = OS.cfg; let html = '';
@@ -236,9 +236,16 @@ const APPS = {
         ${row('Open in about:blank', 'Runs NovaOS inside a blank tab that stays out of your history', `<button class="blank">${glyph('external', 14)}Open</button>`)}
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Panic key</span><small>Press this key anywhere to jump straight to another site.</small></div>
         <div class="row"><input class="pk" style="width:110px" placeholder="Press a key" value="${esc(c.panicKey || '')}" readonly><input class="pu grow" placeholder="https://classroom.google.com" value="${esc(c.panicUrl || '')}"><button class="primary pb">Save</button></div></div>`;
+      if (page === 'users') { const me = OS.account; html = `<h3>Users</h3>
+        <div class="set-row"><div class="row">${avatar(me, 48)}<div class="l"><span style="font-weight:600">${esc(me.name)}</span><small>${esc(me.user)} · ${me.hash ? 'Password set' : 'No password'}</small></div></div></div>
+        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Password</span><small>Asked at sign-in and on the lock screen. Leave blank to remove it.</small></div>
+          <div class="row"><input type="password" class="np grow" placeholder="New password" autocomplete="new-password"><input type="password" class="np2 grow" placeholder="Confirm" autocomplete="new-password"><button class="primary setpw">Change</button></div></div>
+        <div class="small muted" style="margin-bottom:-8px">Other users</div>
+        ${Users.list().filter(u => u.user !== me.user).map(u => row(`<span class="row">${avatar(u, 28)}${esc(u.name)}</span>`, '', `<button class="danger" data-rmuser="${esc(u.user)}">Remove</button>`)).join('') || '<div class="small muted">No other users. Add one from the login screen with “Not listed?”.</div>'}`; }
       if (page === 'system') html = `<h3>System</h3>
-        ${row('NovaOS', 'Version 1.2', `<button class="about">About</button>`)}
-        ${row('Keyboard shortcuts', 'Ctrl+Space Start · Alt+` switch windows · Alt+W close · Alt+T terminal', '')}
+        ${row('NovaOS', 'Version 1.3', `<button class="about">About</button>`)}
+        ${row('Boot menu', 'Show the GRUB menu and boot messages at startup', `<div class="seg">${['show', 'skip'].map(v => `<button data-fast="${v}" class="${!!c.fastBoot === (v === 'skip') ? 'on' : ''}">${v === 'show' ? 'Show' : 'Skip'}</button>`).join('')}</div>`)}
+        ${row('Keyboard shortcuts', 'Ctrl+Space apps · Alt+` switch windows · Alt+W close · Alt+T terminal · Alt+L lock', '')}
         ${row('Storage', Object.keys(localStorage).filter(k => k.startsWith('novaos.')).reduce((n, k) => n + localStorage.getItem(k).length, 0).toLocaleString() + ' bytes used in this browser', '')}
         ${row('Reset', 'Erase files, settings, installed apps and scores', `<button class="danger rs">Reset…</button>`)}`;
       body.innerHTML = `<div class="settings"><nav>${Object.entries(pages).map(([k, [g, n]]) => `<button data-page="${k}" class="${k === page ? 'on' : ''}">${glyph(g)}${n}</button>`).join('')}</nav><section>${html}</section></div>`;
@@ -250,6 +257,13 @@ const APPS = {
       if (d.page) { page = d.page; return draw(); }
       if (d.theme) OS.set({ theme: d.theme }); if (d.accent) OS.set({ accent: d.accent }); if (d.wall) OS.set({ wall: WALLPAPERS[d.wall] });
       if (d.proxy) OS.set({ proxy: d.proxy === 'on' });
+      if (d.fast) OS.set({ fastBoot: d.fast === 'skip' });
+      if (d.rmuser && confirm('Remove this user? Their files stay on this computer.')) Users.remove(d.rmuser);
+      if (b.classList.contains('setpw')) {
+        const a = body.querySelector('.np').value, b2 = body.querySelector('.np2').value;
+        if (a !== b2) return OS.toast("Passwords don't match.");
+        await Users.setPassword(OS.user, a); OS.account = Users.get(OS.user); OS.toast(a ? 'Password changed' : 'Password removed');
+      }
       if (b.classList.contains('ib')) { const u = body.querySelector('.iu').value.trim(); if (u) OS.set({ wall: `url("${u.replace(/["\\]/g, '')}") center/cover` }); }
       if (b.classList.contains('wb')) { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await Proxy.ready(); await Proxy.setTransport(); OS.toast('Proxy server saved'); } catch (err) { OS.toast(err.message); } }
       if (b.classList.contains('blank')) OS.openBlank(location.href);

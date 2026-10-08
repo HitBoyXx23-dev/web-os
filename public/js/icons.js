@@ -23,6 +23,7 @@ const GLYPHS = {
   flappy: '<path d="M4 13c3.5 0 5.5-2 7-6 1.2 3 2.5 4.5 4.5 5.2"/><circle cx="17.5" cy="12.5" r="2.5"/><path d="M20 12.5h1.5"/>',
   web: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   // ui glyphs
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4.5 20c1.4-3.8 4.2-5.8 7.5-5.8s6.1 2 7.5 5.8"/>',
   back: '<path d="M15 5l-7 7 7 7"/>', forward: '<path d="M9 5l7 7-7 7"/>', up: '<path d="M5 15l7-7 7 7"/>',
   reload: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v4.5h-4.5"/>',
   home: '<path d="M4 11l8-7 8 7v8.5a.5.5 0 0 1-.5.5H15v-6H9v6H4.5a.5.5 0 0 1-.5-.5z"/>',

@@ -1,6 +1,6 @@
-// Shell: boot, login, desktop, start menu, taskbar, quick settings, power.
+// Desktop shell: top bar, dock, app launcher, quick settings, calendar/notifications, power.
 const $ = s => document.querySelector(s);
-const initials = n => (n || '?').replace(/_/g, ' ').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+const initials = n => (n || '?').replace(/_/g, ' ').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
 const WALLPAPERS = {
   Graphite: 'linear-gradient(165deg,#20262f 0%,#13171d 55%,#0c0e12 100%)',
@@ -11,29 +11,36 @@ const WALLPAPERS = {
   Dune: 'linear-gradient(170deg,#e8dccb 0%,#d6c4ab 60%,#c2ab8d 100%)',
 };
 const ACCENTS = ['#3b82f6', '#6366f1', '#14b8a6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#71717a'];
-const PINNED = ['browser', 'games', 'vm', 'store', 'files', 'terminal', 'notepad', 'media', 'paint', 'calc', 'settings', 'taskmgr'];
+const DEFAULT_DOCK = ['browser', 'files', 'terminal', 'games', 'vm', 'store', 'settings'];
+const FLYOUTS = ['#quick', '#calendar', '#ctx-menu', '#launcher'];
+const fmtTime = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 const OS = {
-  user: 'user',
-  cfg: {},
+  user: 'user', account: null, cfg: {}, notes: [], afterLogin: null,
   load() { try { this.cfg = JSON.parse(localStorage.getItem('novaos.cfg')) || {}; } catch (e) {} this.apply(); },
   set(p) { Object.assign(this.cfg, p); try { localStorage.setItem('novaos.cfg', JSON.stringify(this.cfg)); } catch (e) {} this.apply(); },
   apply() {
-    const wall = this.cfg.wall || WALLPAPERS.Graphite;
-    $('#desktop').style.background = wall; $('#login').style.background = wall;
-    document.documentElement.style.setProperty('--accent', this.cfg.accent || ACCENTS[0]);
+    const wall = this.cfg.wall || WALLPAPERS.Graphite, accent = this.cfg.accent || ACCENTS[0];
+    $('#desktop').style.background = wall; $('#greeter').style.background = wall;
+    document.documentElement.style.setProperty('--accent', accent);
     document.documentElement.dataset.theme = this.cfg.theme || 'dark';
+    // brightness + night light are real display filters
+    const f = [];
+    if ((this.cfg.brightness ?? 100) < 100) f.push(`brightness(${Math.max(30, this.cfg.brightness)}%)`);
+    if (this.cfg.night) f.push('sepia(.35) saturate(1.15) hue-rotate(-12deg)');
+    document.body.style.filter = f.join(' ');
     const c = typeof CLOAKS !== 'undefined' && CLOAKS[this.cfg.cloak];
     document.title = c ? c.title : 'NovaOS';
     let fav = document.querySelector('link[rel=icon]');
     if (!fav) { fav = document.createElement('link'); fav.rel = 'icon'; document.head.appendChild(fav); }
-    fav.href = c ? c.icon : `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect x="3" y="3" width="11" height="11" rx="3" fill="${this.cfg.accent || ACCENTS[0]}"/><rect x="18" y="3" width="11" height="11" rx="3" fill="${this.cfg.accent || ACCENTS[0]}" opacity=".5"/><rect x="3" y="18" width="11" height="11" rx="3" fill="${this.cfg.accent || ACCENTS[0]}" opacity=".5"/><rect x="18" y="18" width="11" height="11" rx="3" fill="${this.cfg.accent || ACCENTS[0]}"/></svg>`)}`;
+    fav.href = c ? c.icon : 'data:image/svg+xml,' + encodeURIComponent($('#mark-tpl').innerHTML.trim().replace('<svg', `<svg xmlns="http://www.w3.org/2000/svg" style="color:${accent}"`).replace(/currentColor/g, accent));
   },
-  // Installed App Store apps become regular apps (desktop icon + start menu).
+  dock() { return (this.cfg.dock || DEFAULT_DOCK).filter(id => ALL_APPS[id]); },
+  // Installed App Store apps become regular apps (desktop icon, dock, launcher).
   syncApps() {
     for (const id of Object.keys(ALL_APPS)) if (id.startsWith('web:')) delete ALL_APPS[id];
     for (const id of this.cfg.installed || []) { const s = STORE.find(x => x.id === id); if (s) ALL_APPS['web:' + id] = storeApp(s); }
-    this.renderIcons?.();
+    this.renderIcons?.(); this.renderDock?.();
   },
   // Open a URL inside an about:blank tab so it doesn't appear in history.
   openBlank(url) {
@@ -49,11 +56,22 @@ const OS = {
     this.closeFlyouts();
     return WM.open({ title: app.name, icon: app.icon, w: app.w, h: app.h, appId: id, content: (body, win) => app.run(body, win, arg) });
   },
+  // Notifications: shown as a banner (unless Do Not Disturb) and kept in the calendar panel.
   toast(msg) {
-    const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
-    document.body.appendChild(t); setTimeout(() => t.remove(), 2600);
+    this.notes.unshift({ msg, at: new Date() }); this.notes = this.notes.slice(0, 30);
+    $('#tb-clock')?.classList.toggle('has-notes', !!this.notes.length);
+    if (this.cfg.dnd) return;
+    document.querySelectorAll('.toast').forEach(t => t.remove());
+    const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = `<b>NovaOS</b><span></span>`; t.querySelector('span').textContent = msg;
+    document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   },
-  closeFlyouts(except) { for (const s of ['#start-menu', '#power-menu', '#ctx-menu', '#quick']) if (s !== except) $(s).classList.add('hidden'); $('#start-btn').classList.toggle('open', except === '#start-menu'); },
+  closeFlyouts(except) {
+    if (except) document.querySelectorAll('.toast').forEach(t => t.remove());
+    for (const s of FLYOUTS) if (s !== except) $(s).classList.add('hidden');
+    $('#act-btn')?.classList.toggle('on', except === '#launcher');
+    $('#tb-clock')?.classList.toggle('on', except === '#calendar');
+    $('#tb-status')?.classList.toggle('on', except === '#quick');
+  },
   toggle(sel) { const open = $(sel).classList.contains('hidden'); this.closeFlyouts(open ? sel : null); $(sel).classList.toggle('hidden', !open); return open; },
   menu(el, items, x, y) {
     el.innerHTML = ''; for (const it of items) {
@@ -62,154 +80,204 @@ const OS = {
       d.onclick = () => { el.classList.add('hidden'); it[2](); }; el.appendChild(d);
     }
     el.classList.remove('hidden');
-    el.style.left = Math.min(x, innerWidth - el.offsetWidth - 8) + 'px'; el.style.top = Math.min(y, innerHeight - el.offsetHeight - 8) + 'px';
+    el.style.left = Math.max(8, Math.min(x, innerWidth - el.offsetWidth - 8)) + 'px'; el.style.top = Math.max(8, Math.min(y, innerHeight - el.offsetHeight - 8)) + 'px';
   },
 
-  async boot() {
-    const st = $('#boot-status');
-    const steps = ['Starting', 'Loading window manager', 'Loading ' + Object.keys(ALL_APPS).length + ' apps', 'Preparing proxy', 'Almost ready'];
-    for (const s of steps) { st.textContent = s; await new Promise(r => setTimeout(r, 260 + Math.random() * 200)); }
-    $('#boot').classList.add('hidden'); this.showLogin();
-  },
-  showLogin() {
-    $('#login').classList.remove('hidden');
-    const name = localStorage.getItem('novaos.user') || '';
-    const inp = $('#login-name'); inp.value = name; $('#login-avatar').textContent = initials(name || 'Guest');
-    inp.oninput = () => $('#login-avatar').textContent = initials(inp.value || 'Guest');
-    setTimeout(() => inp.focus(), 50);
-    $('#login-form').onsubmit = e => {
-      e.preventDefault();
-      this.user = (inp.value.trim() || 'guest').replace(/\s+/g, '_');
-      try { localStorage.setItem('novaos.user', this.user); } catch (e) {}
-      $('#login').classList.add('hidden'); $('#desktop').classList.remove('hidden');
-      $('#start-user').textContent = this.user.replace(/_/g, ' '); $('#start-av').textContent = initials(this.user);
-    };
+  enterDesktop(unlocking) {
+    $('#desktop').classList.remove('hidden');
+    this.renderDock(); this.renderTop();
+    if (!unlocking) {
+      const greet = new Date().getHours(); this.toast(`Good ${greet < 12 ? 'morning' : greet < 18 ? 'afternoon' : 'evening'}, ${this.account.name.split(' ')[0]}.`);
+      if (this.afterLogin) { const f = this.afterLogin; this.afterLogin = null; f(); }
+    }
   },
 
   initDesktop() {
     document.querySelectorAll('.mark-slot').forEach(s => s.appendChild($('#mark-tpl').content.cloneNode(true)));
-    $('#start-btn').innerHTML = $('#mark-tpl').innerHTML.replace('class="mark"', 'class="mark" style="width:22px;height:22px;color:var(--accent)"');
-    $('#login-go').innerHTML = glyph('forward', 18);
-    $('#ss-icon').innerHTML = glyph('search');
-    $('#power-btn').innerHTML = glyph('power', 18);
-    $('#tray-status').innerHTML = glyph('wifi') + glyph('volume') + '<span class="dot" id="px-dot" title="Proxy"></span>';
+    $('#l-icon').innerHTML = glyph('search', 16);
+    $('#tb-status').innerHTML = `<span class="dot" id="px-dot" title="Proxy"></span>${glyph('wifi', 15)}${glyph('volume', 15)}${glyph('power', 15)}`;
+    WM.onChange = () => { this.renderDock(); this.renderTop(); };
 
     this.renderIcons = () => {
-      const ids = ['browser', 'games', 'vm', 'store', 'files', 'terminal', 'notepad', 'media', 'settings', ...Object.keys(ALL_APPS).filter(id => id.startsWith('web:'))];
+      const ids = ['browser', 'games', 'vm', 'store', 'files', 'terminal', ...Object.keys(ALL_APPS).filter(id => id.startsWith('web:'))];
       $('#icons').innerHTML = ids.map(id => `<div class="icon" data-id="${id}">${tile(ALL_APPS[id].icon, 44)}<span>${esc(ALL_APPS[id].name)}</span></div>`).join('');
     };
     this.renderIcons();
     $('#icons').addEventListener('pointerdown', e => { document.querySelectorAll('.icon.sel').forEach(i => i.classList.remove('sel')); e.target.closest('.icon')?.classList.add('sel'); });
     $('#icons').addEventListener('dblclick', e => { const i = e.target.closest('.icon'); if (i) this.launch(i.dataset.id); });
 
-    // Start menu
-    const cell = id => `<div class="app-cell" data-id="${id}">${tile(ALL_APPS[id].icon, 40)}<span>${esc(ALL_APPS[id].name)}</span></div>`;
-    const renderStart = q => {
-      q = (q || '').trim().toLowerCase();
-      if (!q) {
-        const games = Object.keys(GAME_APPS), web = Object.keys(ALL_APPS).filter(i => i.startsWith('web:'));
-        $('#start-list').innerHTML = `<div class="start-sec">Pinned</div><div class="app-grid">${PINNED.map(cell).join('')}</div>
-          <div class="start-sec">Games</div><div class="app-grid">${games.map(cell).join('')}</div>` +
-          (web.length ? `<div class="start-sec">Installed</div><div class="app-grid">${web.map(cell).join('')}</div>` : '');
-        return;
-      }
-      const hits = Object.keys(ALL_APPS).filter(id => ALL_APPS[id].name.toLowerCase().includes(q));
-      $('#start-list').innerHTML = `<div class="start-sec">Results</div>` + (hits.length ? `<div class="app-grid">${hits.map(cell).join('')}</div>` : `<div class="empty">No apps match “${esc(q)}”.<br><br><button class="primary" id="web-search">Search the web</button></div>`);
-      $('#start-list .app-cell')?.classList.add('kbd');
-      $('#web-search')?.addEventListener('click', () => this.launch('browser', toUrl(q)));
+    // Dock
+    $('#dock').onclick = e => {
+      const b = e.target.closest('[data-dock]'); if (!b) return;
+      if (b.dataset.dock === '@apps') return this.openLauncher();
+      const wins = this.groupWins(b.dataset.dock);
+      if (!wins.length) return this.launch(b.dataset.dock);
+      const top = wins[0];
+      if (top.el.classList.contains('focused') && wins.length === 1) WM.minimize(top.id);
+      else if (top.el.classList.contains('focused')) WM.focus(wins[wins.length - 1].id); // cycle through the app's windows
+      else WM.focus(top.id);
     };
-    $('#start-search').oninput = e => renderStart(e.target.value);
-    $('#start-search').onkeydown = e => {
-      if (e.key !== 'Enter') return;
-      const f = $('#start-list .app-cell'); if (f) this.launch(f.dataset.id); else if (e.target.value.trim()) this.launch('browser', toUrl(e.target.value));
+    $('#dock').oncontextmenu = e => {
+      const b = e.target.closest('[data-dock]'); if (!b || b.dataset.dock === '@apps') return; e.preventDefault();
+      const id = b.dataset.dock, wins = this.groupWins(id), pinned = this.dock().includes(id), r = b.getBoundingClientRect();
+      const items = [];
+      const setDock = dock => { this.set({ dock }); this.renderDock(); };
+      if (ALL_APPS[id]) items.push(['plus', 'New Window', () => this.launch(id)], pinned ? ['close', 'Unpin from Dock', () => setDock(this.dock().filter(x => x !== id))] : ['star', 'Pin to Dock', () => setDock([...this.dock(), id])]);
+      if (wins.length) items.push('-', ['power', wins.length > 1 ? `Quit ${wins.length} Windows` : 'Quit', () => wins.forEach(w => WM.close(w.id))]);
+      this.menu($('#ctx-menu'), items, r.left, r.top - 12 - items.length * 34);
     };
-    $('#start-list').onclick = e => { const c = e.target.closest('.app-cell'); if (c) this.launch(c.dataset.id); };
-    $('#start-btn').onclick = () => { if (this.toggle('#start-menu')) { $('#start-search').value = ''; renderStart(); $('#start-search').focus(); } };
-    $('#power-btn').onclick = e => {
-      const r = e.currentTarget.getBoundingClientRect();
-      this.menu($('#power-menu'), [['lock', 'Lock', () => this.power('lock')], ['reload', 'Restart', () => this.power('restart')], ['power', 'Shut down', () => this.power('shutdown')]], r.left - 140, r.top - 120);
-    };
-    document.addEventListener('pointerdown', e => {
-      if (!e.target.closest('.flyout,#start-btn,#tray')) this.closeFlyouts();
-      else if (!e.target.closest('#power-menu,#power-btn')) $('#power-menu').classList.add('hidden');
-    });
 
-    // Quick settings + calendar
-    $('#tray-status').onclick = () => this.toggle('#quick') && this.renderQuick('settings');
-    $('#clock').onclick = () => this.toggle('#quick') && this.renderQuick('calendar');
+    // Top bar
+    $('#act-btn').onclick = () => $('#launcher').classList.contains('hidden') ? this.openLauncher() : this.closeFlyouts();
+    $('#tb-clock').onclick = () => this.toggle('#calendar') && this.renderCalendar();
+    $('#tb-status').onclick = () => this.toggle('#quick') && this.renderQuick();
+
+    // Launcher
+    $('#l-input').oninput = () => this.renderLauncher();
+    $('#l-input').onkeydown = e => {
+      if (e.key !== 'Enter') return;
+      const f = $('#l-grid .app-cell'); if (f) this.launch(f.dataset.id); else if (e.target.value.trim()) this.launch('browser', toUrl(e.target.value));
+    };
+    $('#launcher').onclick = e => { const c = e.target.closest('.app-cell'); if (c) return this.launch(c.dataset.id); if (e.target.id === 'web-search') return this.launch('browser', toUrl($('#l-input').value)); if (!e.target.closest('.l-search')) this.closeFlyouts(); };
+
+    document.addEventListener('pointerdown', e => {
+      if (!e.target.closest('.flyout,#launcher,#topbar,#dock')) this.closeFlyouts();
+      else if (!e.target.closest('#ctx-menu')) $('#ctx-menu').classList.add('hidden');
+    });
 
     // Desktop right-click menu
     $('#icons').oncontextmenu = e => {
       e.preventDefault(); this.closeFlyouts();
       const i = e.target.closest('.icon');
-      const items = i ? [['open', 'Open', () => this.launch(i.dataset.id)]] : [
-        ['reload', 'Refresh', () => this.renderIcons()], ['notepad', 'New text document', () => this.launch('notepad')], ['terminal', 'Open in Terminal', () => this.launch('terminal')], '-',
-        ['store', 'App Store', () => this.launch('store')], ['taskmgr', 'Task Manager', () => this.launch('taskmgr')], '-',
-        ['paint', 'Personalize', () => this.launch('settings', 'appearance')], ['about', 'About NovaOS', () => this.launch('about')]];
+      const items = i ? [['open', 'Open', () => this.launch(i.dataset.id)], ['star', 'Pin to Dock', () => { this.set({ dock: [...new Set([...this.dock(), i.dataset.id])] }); this.renderDock(); }]] : [
+        ['notepad', 'New Document', () => this.launch('notepad')], ['terminal', 'Open in Terminal', () => this.launch('terminal')], '-',
+        ['grid', 'Show Applications', () => this.openLauncher()], ['taskmgr', 'System Monitor', () => this.launch('taskmgr')], '-',
+        ['paint', 'Change Background…', () => this.launch('settings', 'appearance')], ['settings', 'Settings', () => this.launch('settings')]];
       this.menu($('#ctx-menu'), items, e.clientX, e.clientY);
     };
 
     // Keyboard shortcuts
     addEventListener('keydown', e => {
+      if ($('#desktop').classList.contains('hidden')) return;
       if (this.cfg.panicKey && e.key === this.cfg.panicKey && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return location.replace(this.cfg.panicUrl || 'https://classroom.google.com');
-      if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); $('#start-btn').click(); }
+      if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); $('#launcher').classList.contains('hidden') ? this.openLauncher() : this.closeFlyouts(); }
       else if (e.altKey && e.code === 'Backquote') { e.preventDefault(); WM.cycle(); }
       else if (e.altKey && e.key.toLowerCase() === 'w') { const w = WM.focused(); if (w) { e.preventDefault(); WM.close(w.id); } }
       else if (e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); this.launch('terminal'); }
+      else if (e.altKey && e.key.toLowerCase() === 'l') { e.preventDefault(); this.power('lock'); }
       else if (e.key === 'Escape') this.closeFlyouts();
     });
 
     const tick = () => {
-      const d = new Date(), t = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      $('#clock').innerHTML = `${t}<br>${d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
-      $('#login-clock').textContent = t; $('#login-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+      const d = new Date(), date = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+      $('#tb-clock').textContent = `${date}  ${fmtTime(d)}`; $('#g-clock').textContent = `${date}  ${fmtTime(d)}`;
+      $('#g-lock-time').textContent = fmtTime(d).replace(/\s?[AP]M$/i, ''); $('#g-lock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     };
     tick(); setInterval(tick, 1000);
+    addEventListener('resize', () => { for (const w of WM.wins.values()) if (w.el.offsetTop < TOPBAR_H) w.el.style.top = TOPBAR_H + 'px'; });
   },
 
-  renderQuick(view) {
-    const q = $('#quick');
-    if (view === 'calendar') {
-      const d = new Date(), first = new Date(d.getFullYear(), d.getMonth(), 1), days = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      let cells = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => `<span class="dow">${x}</span>`).join('');
-      const prevDays = new Date(d.getFullYear(), d.getMonth(), 0).getDate();
-      for (let i = first.getDay(); i > 0; i--) cells += `<span class="dim">${prevDays - i + 1}</span>`;
-      for (let i = 1; i <= days; i++) cells += `<span class="${i === d.getDate() ? 'today' : ''}">${i}</span>`;
-      q.innerHTML = `<div><div style="font-size:15px;font-weight:600">${d.toLocaleDateString([], { weekday: 'long' })}</div><div class="muted">${d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</div></div>
-        <div class="cal">${cells}</div>`;
+  // Windows for a dock entry, newest-focused first. Entries are app ids, or a window id for app-less windows.
+  groupWins(key) { return WM.byZ().filter(w => (w.appId || w.id) === key); },
+  renderDock() {
+    const pinned = this.dock(), running = [];
+    for (const w of WM.byZ().reverse()) { const k = w.appId || w.id; if (!pinned.includes(k) && !running.includes(k)) running.push(k); }
+    const item = k => {
+      const wins = this.groupWins(k), w = wins[0], app = ALL_APPS[k];
+      const icon = app ? app.icon : w.icon, label = app ? app.name : w.title;
+      const focused = wins.some(x => x.el.classList.contains('focused'));
+      return `<button class="dock-item${focused ? ' focused' : ''}" data-dock="${esc(k)}" data-label="${esc(label)}">${tile(icon, 44)}<span class="dots">${'<i></i>'.repeat(Math.min(wins.length, 3))}</span></button>`;
+    };
+    $('#dock').innerHTML = pinned.map(item).join('') + (running.length ? '<span class="dock-sep"></span>' + running.map(item).join('') : '') +
+      `<span class="dock-sep"></span><button class="dock-item" data-dock="@apps" data-label="Show Applications"><span class="apps-btn">${glyph('grid', 22)}</span></button>`;
+  },
+  renderTop() {
+    const w = WM.focused(), el = $('#tb-app');
+    el.innerHTML = w ? `${tile(w.icon, 16)}<span>${esc(w.appId && ALL_APPS[w.appId] ? ALL_APPS[w.appId].name : w.title)}</span>` : '';
+  },
+  openLauncher() {
+    this.closeFlyouts('#launcher'); $('#launcher').classList.remove('hidden');
+    $('#l-input').value = ''; this.renderLauncher(); setTimeout(() => $('#l-input').focus(), 30);
+  },
+  renderLauncher() {
+    const q = $('#l-input').value.trim().toLowerCase();
+    const cell = id => `<div class="app-cell" data-id="${id}">${tile(ALL_APPS[id].icon, 64)}<span>${esc(ALL_APPS[id].name)}</span></div>`;
+    if (q) {
+      const hits = Object.keys(ALL_APPS).filter(id => ALL_APPS[id].name.toLowerCase().includes(q));
+      $('#l-grid').innerHTML = hits.length ? `<div class="l-grid">${hits.map(cell).join('')}</div>` : `<div class="empty">No applications match “${esc(q)}”<br><br><button class="primary" id="web-search">${glyph('search', 14)}Search the web</button></div>`;
       return;
     }
-    const dark = (this.cfg.theme || 'dark') === 'dark', px = this.cfg.proxy !== false;
-    q.innerHTML = `<div class="qs-grid">
-        <button class="qs ${dark ? 'on' : ''}" data-q="theme">${glyph(dark ? 'moon' : 'sun', 18)}${dark ? 'Dark' : 'Light'}</button>
-        <button class="qs ${px ? 'on' : ''}" data-q="proxy">${glyph('shield', 18)}Proxy</button>
-        <button class="qs" data-q="settings">${glyph('settings', 18)}Settings</button>
-      </div>
-      <div class="status-line"><span class="dot" id="qs-dot"></span><span id="qs-px">Checking proxy…</span></div>
-      <div class="row" style="justify-content:space-between"><span class="muted small">${WM.wins.size} open window${WM.wins.size === 1 ? '' : 's'}</span>
-      <button class="ghost small" data-q="taskmgr">${glyph('taskmgr', 14)}Task Manager</button></div>`;
+    const apps = Object.keys(APPS).filter(id => id !== 'about'), games = Object.keys(GAME_APPS), web = Object.keys(ALL_APPS).filter(i => i.startsWith('web:'));
+    $('#l-grid').innerHTML = `<div class="l-sec">Applications</div><div class="l-grid">${apps.map(cell).join('')}</div>
+      <div class="l-sec">Games</div><div class="l-grid">${games.map(cell).join('')}</div>` +
+      (web.length ? `<div class="l-sec">Installed</div><div class="l-grid">${web.map(cell).join('')}</div>` : '');
+  },
+
+  renderQuick() {
+    const c = this.cfg, dark = (c.theme || 'dark') === 'dark', u = this.account;
+    const pill = (k, g, label, on, sub) => `<button class="qs-pill ${on ? 'on' : ''}" data-q="${k}">${glyph(g, 16)}<span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span></button>`;
+    $('#quick').innerHTML = `<div class="qs-top">
+        <div class="user-chip">${avatar(u, 30)}<span>${esc(u ? u.name : '')}</span></div>
+        <span class="grow"></span>
+        <button class="qs-round" data-q="settings" title="Settings">${glyph('settings', 16)}</button>
+        <button class="qs-round" data-q="lock" title="Lock">${glyph('lock', 16)}</button>
+        <button class="qs-round" data-q="power" title="Power Off / Log Out">${glyph('power', 16)}</button></div>
+      <div class="qs-power hidden">
+        <button class="menu-item" data-q="suspend">${glyph('moon')}Suspend</button><button class="menu-item" data-q="restart">${glyph('reload')}Restart…</button>
+        <button class="menu-item" data-q="shutdown">${glyph('power')}Power Off…</button><div class="menu-sep"></div><button class="menu-item" data-q="logout">${glyph('back')}Log Out</button></div>
+      <label class="qs-slider">${glyph('sun', 16)}<input type="range" min="30" max="100" value="${c.brightness ?? 100}" data-q="brightness"></label>
+      <div class="qs-pills">
+        ${pill('proxy', 'shield', 'Proxy', c.proxy !== false, '<span id="qs-px">…</span>')}
+        ${pill('theme', dark ? 'moon' : 'sun', 'Dark Style', dark)}
+        ${pill('night', 'moon', 'Night Light', c.night)}
+        ${pill('dnd', 'volume', 'Do Not Disturb', c.dnd)}
+      </div>`;
+    const q = $('#quick');
     q.onclick = e => {
-      const b = e.target.closest('[data-q]'); if (!b) return;
-      const k = b.dataset.q;
-      if (k === 'theme') { this.set({ theme: dark ? 'light' : 'dark' }); this.renderQuick(); }
-      else if (k === 'proxy') { this.set({ proxy: !px }); this.renderQuick(); }
-      else this.launch(k);
+      const b = e.target.closest('button[data-q]'); if (!b) return; const k = b.dataset.q;
+      if (k === 'power') return q.querySelector('.qs-power').classList.toggle('hidden');
+      if (k === 'proxy') this.set({ proxy: c.proxy === false });
+      else if (k === 'theme') this.set({ theme: dark ? 'light' : 'dark' });
+      else if (k === 'night') this.set({ night: !c.night });
+      else if (k === 'dnd') this.set({ dnd: !c.dnd });
+      else if (k === 'settings') return this.launch('settings');
+      else if (k === 'suspend') return this.power('lock');
+      else return this.power(k);
+      this.renderQuick(); this.updateProxyDot();
     };
-    this.proxyStatus().then(([ok, msg]) => { if (!$('#qs-px')) return; $('#qs-px').textContent = msg; $('#qs-dot').className = 'dot ' + (ok ? 'ok' : 'bad'); });
+    q.querySelector('[data-q=brightness]').oninput = e => this.set({ brightness: +e.target.value });
+    this.proxyStatus().then(([ok, msg]) => { const s = $('#qs-px'); if (s) s.textContent = ok ? new URL(Proxy.wispUrl()).host : c.proxy === false ? 'Off' : 'Unavailable'; });
+  },
+  renderCalendar(offset = 0) {
+    const now = new Date(), m = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const days = new Date(m.getFullYear(), m.getMonth() + 1, 0).getDate(), prev = new Date(m.getFullYear(), m.getMonth(), 0).getDate();
+    let cells = ['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(x => `<span class="dow">${x}</span>`).join('');
+    for (let i = m.getDay(); i > 0; i--) cells += `<span class="dim">${prev - i + 1}</span>`;
+    for (let i = 1; i <= days; i++) cells += `<span class="${!offset && i === now.getDate() ? 'today' : ''}">${i}</span>`;
+    const ago = d => { const s = (Date.now() - d) / 1000; return s < 60 ? 'Just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : fmtTime(d); };
+    $('#calendar').innerHTML = `<div class="cal-notes">${this.notes.length ? this.notes.map(n => `<div class="note"><div class="note-h"><b>NovaOS</b><span>${ago(n.at)}</span></div>${esc(n.msg)}</div>`).join('') : `<div class="cal-empty">${glyph('volume', 28)}<span>No Notifications</span></div>`}
+        <div class="cal-foot"><label class="row small"><span>Do Not Disturb</span><input type="checkbox" class="switch" id="cal-dnd" ${this.cfg.dnd ? 'checked' : ''}></label><button class="ghost small" id="cal-clear" ${this.notes.length ? '' : 'disabled'}>Clear</button></div></div>
+      <div class="cal-side"><div class="cal-today"><small>${now.toLocaleDateString([], { weekday: 'long' })}</small><b>${now.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</b></div>
+        <div class="cal-nav"><button class="icon-btn" data-m="-1">${glyph('back', 14)}</button><span>${m.toLocaleDateString([], { month: 'long', year: 'numeric' })}</span><button class="icon-btn" data-m="1">${glyph('forward', 14)}</button></div>
+        <div class="cal">${cells}</div></div>`;
+    $('#calendar').querySelectorAll('[data-m]').forEach(b => b.onclick = () => this.renderCalendar(offset + +b.dataset.m));
+    $('#cal-clear').onclick = () => { this.notes = []; $('#tb-clock').classList.remove('has-notes'); this.renderCalendar(offset); };
+    $('#cal-dnd').onchange = e => this.set({ dnd: e.target.checked });
   },
   async proxyStatus() {
     if (this.cfg.proxy === false) return [false, 'Proxy off — sites load directly'];
     try { await Proxy.ready(); return [true, 'Proxy connected via ' + new URL(Proxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
   },
+  updateProxyDot() { this.proxyStatus().then(([ok]) => { const d = $('#px-dot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'bad'); }); },
 
   power(kind) {
     this.closeFlyouts();
-    if (kind === 'lock') { $('#desktop').classList.add('hidden'); this.showLogin(); return; }
-    WM.closeAll(); $('#desktop').classList.add('hidden');
-    if (kind === 'restart') { $('#boot').classList.remove('hidden'); this.boot(); }
+    if (kind === 'lock') { Greeter.show(this.user); return; }
+    if (kind === 'logout') { WM.closeAll(); $('#desktop').classList.add('hidden'); Greeter.show(); return; }
+    WM.closeAll(); $('#desktop').classList.add('hidden'); Greeter.hide();
+    if (kind === 'restart') Boot.start();
     else $('#off').classList.remove('hidden');
   },
 };
 
-OS.load(); OS.syncApps(); OS.initDesktop(); OS.boot();
-OS.proxyStatus().then(([ok]) => { const d = $('#px-dot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'bad'); });
+OS.load(); OS.syncApps(); OS.initDesktop(); Boot.start(); OS.updateProxyDot();
