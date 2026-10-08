@@ -4,7 +4,7 @@ const BASE = location.pathname.replace(/[^/]*$/, '');
 
 const WebProxy = {
   _ready: null, _sj: null,
-  ENGINES: { hitboy: 'HitBoy Proxy', scramjet: 'Scramjet', uv: 'Ultraviolet' },
+  ENGINES: { hitboy: 'HitBoy Proxy', scramjet: 'Scramjet' }, // Ultraviolet stays as HitBoy Proxy's automatic fallback
   TRANSPORTS: { hitboy: 'Automatic', libcurl: 'libcurl only', epoxy: 'Epoxy only' },
   engine() { return this.ENGINES[OS.cfg.engine] ? OS.cfg.engine : 'hitboy'; },
   // HitBoy Proxy picks the page engine per site: Scramjet, or Ultraviolet for sites that failed in Scramjet.
