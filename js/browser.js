@@ -33,46 +33,52 @@ function toUrl(v) {
 }
 
 const QUICK_LINKS = [
-  { name: 'Google', icon: '🔎', url: 'https://www.google.com' },
-  { name: 'YouTube', icon: '▶️', url: 'https://www.youtube.com' },
-  { name: 'Discord', icon: '💬', url: 'https://discord.com/app' },
-  { name: 'Reddit', icon: '👽', url: 'https://www.reddit.com' },
-  { name: 'Poki', icon: '🕹️', url: 'https://poki.com' },
-  { name: 'Wikipedia', icon: '📚', url: 'https://en.wikipedia.org' },
+  { name: 'Google', mono: 'G', bg: '#4285f4', url: 'https://www.google.com' },
+  { name: 'YouTube', mono: 'YT', bg: '#dc2626', url: 'https://www.youtube.com' },
+  { name: 'Discord', mono: 'Dc', bg: '#5865f2', url: 'https://discord.com/app' },
+  { name: 'Reddit', mono: 'R', bg: '#ff4500', url: 'https://www.reddit.com' },
+  { name: 'Poki', mono: 'Po', bg: '#0ea5e9', url: 'https://poki.com' },
+  { name: 'Wikipedia', mono: 'W', bg: '#3f3f46', url: 'https://en.wikipedia.org' },
 ];
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
+const monoOf = u => { const h = hostOf(u); return h.charAt(0).toUpperCase() + (h.charAt(1) || ''); };
 
-// opts: { url, single } — single = app mode (no tab strip).
+// opts: { url, single, title } — single = app mode (no tab strip).
 function BrowserApp(body, win, opts = {}) {
   body.innerHTML = `<div class="fill browser">
-    <div class="tabs"><div class="tablist"></div><button class="newtab" title="New tab">＋</button></div>
+    <div class="tabs"><div class="tablist"></div><button class="icon-btn newtab" title="New tab">${glyph('plus')}</button></div>
     <div class="toolbar">
-      <button class="bk" title="Back">←</button><button class="fw" title="Forward">→</button><button class="rl" title="Reload">⟳</button><button class="hm" title="Home">⌂</button>
-      <input class="u grow" spellcheck="false" placeholder="Search or enter address">
-      <button class="bm" title="Bookmark">☆</button><button class="px" title="Toggle proxy"></button><button class="pop" title="Open in about:blank tab">⧉</button>
+      <button class="icon-btn bk" title="Back">${glyph('back')}</button><button class="icon-btn fw" title="Forward">${glyph('forward')}</button>
+      <button class="icon-btn rl" title="Reload">${glyph('reload')}</button><button class="icon-btn hm" title="Home">${glyph('home')}</button>
+      <div class="omni"><input class="u" spellcheck="false" placeholder="Search or enter address"><button class="badge px" title="Toggle proxy"></button></div>
+      <button class="icon-btn bm" title="Bookmark this page">${glyph('star')}</button><button class="icon-btn pop" title="Open in about:blank tab">${glyph('external')}</button>
     </div>
+    <div class="loadbar"></div>
     <div class="bmbar"></div>
     <div class="grow pages"></div></div>`;
   if (opts.single) body.querySelector('.tabs').style.display = 'none';
   const $b = s => body.querySelector(s);
-  const u = $b('.u'), pages = $b('.pages');
+  const u = $b('.u'), pages = $b('.pages'), bar = $b('.loadbar');
   const tabs = []; let cur = null;
   const proxyOn = () => OS.cfg.proxy !== false;
+  const loading = on => { bar.style.opacity = 1; bar.style.width = on ? '70%' : '100%'; if (!on) setTimeout(() => { bar.style.opacity = 0; bar.style.width = 0; }, 300); };
 
-  const renderPx = () => { $b('.px').textContent = proxyOn() ? '🛡️ Proxy' : '🌐 Direct'; $b('.px').style.background = proxyOn() ? 'var(--accent)' : ''; };
+  const renderPx = () => { const b = $b('.px'); b.innerHTML = glyph('shield', 12) + (proxyOn() ? 'Proxy' : 'Direct'); b.classList.toggle('on', proxyOn()); };
   const renderBookmarks = () => {
     const bms = OS.cfg.bookmarks || [];
-    $b('.bmbar').innerHTML = bms.map((b, i) => `<button data-i="${i}" title="${esc(b.url)}">${esc(b.title.slice(0, 24))}</button>`).join('');
+    $b('.bmbar').innerHTML = bms.map((b, i) => `<button data-i="${i}" title="${esc(b.url)}">${esc(b.title.slice(0, 28))}</button>`).join('');
     $b('.bmbar').style.display = bms.length ? '' : 'none';
-    if (cur) $b('.bm').textContent = bms.some(b => b.url === cur.url) ? '★' : '☆';
+    $b('.bm').classList.toggle('on', !!cur && bms.some(b => b.url === cur.url));
   };
   const renderTabs = () => {
-    $b('.tablist').innerHTML = tabs.map((t, i) => `<div class="tab${t === cur ? ' on' : ''}" data-i="${i}"><span>${esc(t.title || 'New Tab')}</span><b data-x="${i}">×</b></div>`).join('');
-    if (opts.single && cur) win.el.querySelector('.titlebar .t').textContent = (opts.title || 'Browser') + (cur.title ? ' — ' + cur.title : '');
+    $b('.tablist').innerHTML = tabs.map((t, i) => `<div class="tab${t === cur ? ' on' : ''}" data-i="${i}" title="${esc(t.title || 'New Tab')}"><span>${esc(t.title || 'New Tab')}</span><button class="tx" data-x="${i}">${glyph('close', 12)}</button></div>`).join('');
+    if (cur) WM.setTitle(win, opts.single ? (opts.title || 'Browser') : (cur.title || 'New Tab') + ' — Browser');
   };
-  const homeHtml = () => `<div class="newtab-page"><div class="nt-logo">◆ Nova Browser</div>
-    <input class="nt-q" placeholder="Search the web or type a URL">
-    <div class="grid-cards">${[...QUICK_LINKS, ...(OS.cfg.bookmarks || [])].map(l => `<div class="card" data-url="${esc(l.url)}"><div class="em">${esc(l.icon || '⭐')}</div>${esc(l.name || l.title)}</div>`).join('')}</div>
-    <p class="nt-status"></p></div>`;
+  const homeHtml = () => `<div class="newtab-page"><div class="nt-brand"><span style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML.replace('class="mark"', 'class="mark" style="width:30px;height:30px"')}</span>Search</div>
+    <div class="nt-q">${glyph('search', 18)}<input placeholder="Search the web or type an address" spellcheck="false"></div>
+    <div class="shortcuts">${[...QUICK_LINKS, ...(OS.cfg.bookmarks || []).map(b => ({ name: b.title, url: b.url }))].slice(0, 16).map(l =>
+      `<div class="app-cell" data-url="${esc(l.url)}" title="${esc(l.url)}">${tile({ mono: l.mono || monoOf(l.url), bg: l.bg || '#52525b' }, 40)}<span style="max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.name)}</span></div>`).join('')}</div>
+    <div class="status-line"><span class="dot"></span><span class="nt-status">${proxyOn() ? 'Connecting to proxy…' : 'Proxy is off. Sites load directly.'}</span></div></div>`;
 
   const select = t => {
     cur = t; tabs.forEach(x => x.el.style.display = x === t ? '' : 'none');
@@ -91,29 +97,38 @@ function BrowserApp(body, win, opts = {}) {
   };
   const home = t => {
     t.url = ''; t.title = 'New Tab'; t.frame = null; t.el.innerHTML = homeHtml();
-    const q = t.el.querySelector('.nt-q');
+    const q = t.el.querySelector('.nt-q input');
     q.onkeydown = e => e.key === 'Enter' && q.value.trim() && navigate(t, toUrl(q.value));
-    t.el.querySelector('.grid-cards').onclick = e => { const c = e.target.closest('.card'); if (c) navigate(t, c.dataset.url); };
-    if (proxyOn()) Proxy.ready().then(() => t.el.querySelector('.nt-status') && (t.el.querySelector('.nt-status').textContent = '🛡️ Proxy connected via ' + Proxy.wispUrl()))
-      .catch(e => t.el.querySelector('.nt-status') && (t.el.querySelector('.nt-status').textContent = '⚠️ ' + e.message));
+    t.el.querySelector('.shortcuts').onclick = e => { const c = e.target.closest('[data-url]'); if (c) navigate(t, c.dataset.url); };
+    if (proxyOn()) OS.proxyStatus().then(([ok, m]) => { const s = t.el.querySelector('.nt-status'); if (s) { s.textContent = m; s.previousElementSibling.className = 'dot ' + (ok ? 'ok' : 'bad'); } });
     if (t === cur) { u.value = ''; renderTabs(); renderBookmarks(); setTimeout(() => q.focus()); }
   };
   const navigate = async (t, url) => {
-    t.url = url; t.title = new URL(url).hostname; if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); }
+    t.url = url; t.title = hostOf(url); if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); }
     let src = url;
+    loading(true);
     if (proxyOn()) {
-      t.el.innerHTML = '<div class="pad" style="color:var(--muted)">Connecting to proxy…</div>';
+      t.el.innerHTML = '';
       try { await Proxy.ready(); src = Proxy.encode(url); }
-      catch (e) { t.el.innerHTML = `<div class="pad"><h3>⚠️ Proxy unavailable</h3><p>${esc(e.message)}</p><p>You can set a Wisp server in Settings → Proxy, or switch to Direct mode (🛡️ button) — many sites refuse to load directly.</p></div>`; return; }
+      catch (e) {
+        loading(false);
+        t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
+          <p class="muted">Set a Wisp server in Settings → Proxy, or turn the proxy off. Many sites refuse to load without it.</p>
+          <div class="row"><button class="primary" data-act="settings">Open proxy settings</button><button data-act="direct">Load directly</button></div></div>`;
+        t.el.querySelector('[data-act=settings]').onclick = () => OS.launch('settings', 'proxy');
+        t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url); };
+        return;
+      }
     }
     t.el.innerHTML = ''; const f = document.createElement('iframe');
     f.setAttribute('allow', 'autoplay; fullscreen; clipboard-write; gamepad; encrypted-media');
     f.setAttribute('allowfullscreen', ''); f.src = src; t.el.appendChild(f); t.frame = f;
     f.onload = () => {
+      loading(false);
       try { // same-origin when proxied: read the real URL and title
         const real = Proxy.decode(f.contentWindow.location.pathname + f.contentWindow.location.search);
         if (real) t.url = real;
-        t.title = f.contentDocument.title || t.title;
+        t.title = f.contentDocument.title || hostOf(t.url);
         // links that try to open new windows open as new tabs instead
         f.contentWindow.open = (href) => { if (href) newTab(new URL(href, t.url).href); return null; };
       } catch (e) {}
@@ -132,7 +147,7 @@ function BrowserApp(body, win, opts = {}) {
   $b('.rl').onclick = () => cur.url ? navigate(cur, cur.url) : home(cur);
   $b('.hm').onclick = () => home(cur);
   $b('.newtab').onclick = () => newTab();
-  $b('.tablist').onclick = e => { if (e.target.dataset.x) return closeTab(tabs[e.target.dataset.x]); const el = e.target.closest('.tab'); if (el) select(tabs[el.dataset.i]); };
+  $b('.tablist').onclick = e => { const x = e.target.closest('[data-x]'); if (x) return closeTab(tabs[x.dataset.x]); const el = e.target.closest('.tab'); if (el) select(tabs[el.dataset.i]); };
   $b('.tablist').onauxclick = e => { const el = e.target.closest('.tab'); if (el && e.button === 1) closeTab(tabs[el.dataset.i]); };
   $b('.bm').onclick = () => {
     if (!cur.url) return; let bms = OS.cfg.bookmarks || [];
@@ -147,21 +162,21 @@ function BrowserApp(body, win, opts = {}) {
 
 // App Store catalog: web apps that open through the proxy browser in app mode.
 const STORE = [
-  { id: 'youtube', name: 'YouTube', icon: '▶️', url: 'https://www.youtube.com', cat: 'Media' },
-  { id: 'spotify', name: 'Spotify', icon: '🎧', url: 'https://open.spotify.com', cat: 'Media' },
-  { id: 'twitch', name: 'Twitch', icon: '📺', url: 'https://www.twitch.tv', cat: 'Media' },
-  { id: 'soundcloud', name: 'SoundCloud', icon: '☁️', url: 'https://soundcloud.com', cat: 'Media' },
-  { id: 'discord', name: 'Discord', icon: '💬', url: 'https://discord.com/app', cat: 'Social' },
-  { id: 'reddit', name: 'Reddit', icon: '👽', url: 'https://www.reddit.com', cat: 'Social' },
-  { id: 'tiktok', name: 'TikTok', icon: '🎵', url: 'https://www.tiktok.com', cat: 'Social' },
-  { id: 'poki', name: 'Poki', icon: '🕹️', url: 'https://poki.com', cat: 'Games' },
-  { id: 'crazygames', name: 'CrazyGames', icon: '🤪', url: 'https://www.crazygames.com', cat: 'Games' },
-  { id: 'coolmath', name: 'Coolmath Games', icon: '➗', url: 'https://www.coolmathgames.com', cat: 'Games' },
-  { id: 'scratch', name: 'Scratch', icon: '🐱', url: 'https://scratch.mit.edu', cat: 'Create' },
-  { id: 'github', name: 'GitHub', icon: '🐙', url: 'https://github.com', cat: 'Create' },
-  { id: 'vscode', name: 'VS Code Web', icon: '🧑‍💻', url: 'https://vscode.dev', cat: 'Create' },
-  { id: 'photopea', name: 'Photopea', icon: '🖌️', url: 'https://www.photopea.com', cat: 'Create' },
-  { id: 'wikipedia', name: 'Wikipedia', icon: '📚', url: 'https://en.wikipedia.org', cat: 'Tools' },
-  { id: 'gtranslate', name: 'Translate', icon: '🈯', url: 'https://translate.google.com', cat: 'Tools' },
+  { id: 'youtube', name: 'YouTube', mono: 'YT', bg: '#dc2626', desc: 'Videos and music', url: 'https://www.youtube.com', cat: 'Entertainment' },
+  { id: 'spotify', name: 'Spotify', mono: 'Sp', bg: '#16a34a', desc: 'Music and podcasts', url: 'https://open.spotify.com', cat: 'Entertainment' },
+  { id: 'twitch', name: 'Twitch', mono: 'Tw', bg: '#7c3aed', desc: 'Live streams', url: 'https://www.twitch.tv', cat: 'Entertainment' },
+  { id: 'soundcloud', name: 'SoundCloud', mono: 'SC', bg: '#ea580c', desc: 'Independent music', url: 'https://soundcloud.com', cat: 'Entertainment' },
+  { id: 'discord', name: 'Discord', mono: 'Dc', bg: '#5865f2', desc: 'Chat with friends', url: 'https://discord.com/app', cat: 'Social' },
+  { id: 'reddit', name: 'Reddit', mono: 'R', bg: '#ff4500', desc: 'Communities', url: 'https://www.reddit.com', cat: 'Social' },
+  { id: 'tiktok', name: 'TikTok', mono: 'Tk', bg: '#18181b', desc: 'Short videos', url: 'https://www.tiktok.com', cat: 'Social' },
+  { id: 'poki', name: 'Poki', mono: 'Po', bg: '#0ea5e9', desc: 'Browser games', url: 'https://poki.com', cat: 'Games' },
+  { id: 'crazygames', name: 'CrazyGames', mono: 'CG', bg: '#9333ea', desc: 'Browser games', url: 'https://www.crazygames.com', cat: 'Games' },
+  { id: 'coolmath', name: 'Coolmath Games', mono: 'CM', bg: '#0284c7', desc: 'Puzzle and logic games', url: 'https://www.coolmathgames.com', cat: 'Games' },
+  { id: 'scratch', name: 'Scratch', mono: 'Sc', bg: '#f59e0b', desc: 'Make games and animations', url: 'https://scratch.mit.edu', cat: 'Create' },
+  { id: 'github', name: 'GitHub', mono: 'GH', bg: '#27272a', desc: 'Code hosting', url: 'https://github.com', cat: 'Create' },
+  { id: 'vscode', name: 'VS Code', mono: 'VS', bg: '#0078d4', desc: 'Code editor', url: 'https://vscode.dev', cat: 'Create' },
+  { id: 'photopea', name: 'Photopea', mono: 'Pp', bg: '#0d9488', desc: 'Photo editor', url: 'https://www.photopea.com', cat: 'Create' },
+  { id: 'wikipedia', name: 'Wikipedia', mono: 'W', bg: '#3f3f46', desc: 'Encyclopedia', url: 'https://en.wikipedia.org', cat: 'Tools' },
+  { id: 'gtranslate', name: 'Translate', mono: 'Tr', bg: '#2563eb', desc: 'Translate text', url: 'https://translate.google.com', cat: 'Tools' },
 ];
-const storeApp = s => ({ name: s.name, icon: s.icon, cat: 'Installed', w: 1000, h: 680, run: (b, w) => BrowserApp(b, w, { url: s.url, single: true, title: s.name }) });
+const storeApp = s => ({ name: s.name, icon: { mono: s.mono, bg: s.bg }, cat: 'Installed', w: 1000, h: 680, run: (b, w) => BrowserApp(b, w, { url: s.url, single: true, title: s.name }) });
