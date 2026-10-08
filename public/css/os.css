@@ -545,7 +545,7 @@ canvas { display: block; max-width: 100%; }
 .su-hybrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 18px; }
 .su-hybrid .field, .su-form .field { color: rgba(255, 255, 255, .75); }
 #setup select, #setup input:not([type=checkbox]) { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .16); color: #fff; }
-#setup select option { color: #000; }
+#setup select option { background: #26262b; color: #fff; }
 #setup .muted { color: rgba(255, 255, 255, .45); }
 .su-mode { margin-bottom: 16px; }
 .su-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
@@ -592,3 +592,5 @@ canvas { display: block; max-width: 100%; }
 #taskbar .bar-ph { width: 44px; height: 40px; border-radius: 6px; }
 #dock[data-kind=dock-left] .bar-ph { width: 54px; height: 56px; }
 body.dragging-app, body.dragging-app * { user-select: none; cursor: grabbing !important; }
+/* Dropdown lists: readable in both themes (the opened list doesn't inherit the select's colors) */
+select option { background: var(--surface-2); color: var(--text); }
