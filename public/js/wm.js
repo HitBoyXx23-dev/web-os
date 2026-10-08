@@ -1,7 +1,7 @@
 // Window manager: create, drag, snap, resize, focus, minimize, maximize, close.
-// The usable area sits between the top bar and the dock.
-const TOPBAR_H = 32, DOCK_H = 76;
-const area = () => ({ x: 0, y: TOPBAR_H, w: innerWidth, h: innerHeight - TOPBAR_H - DOCK_H });
+// The usable area: whatever the current desktop style's panels leave free (set by Shell.apply()).
+const WA = { top: 32, bottom: 76, left: 0 };
+const area = () => ({ x: WA.left, y: WA.top, w: innerWidth - WA.left, h: innerHeight - WA.top - WA.bottom });
 
 const WM = {
   z: 10, wins: new Map(), seq: 0,
@@ -13,8 +13,8 @@ const WM = {
     const a = area();
     w = Math.min(w, a.w - 16); h = Math.min(h, a.h - 16);
     const off = (this.wins.size % 6) * 28;
-    el.style.cssText = `width:${w}px;height:${h}px;left:${Math.max(8, (a.w - w) / 2 - 70 + off)}px;top:${Math.max(a.y + 8, a.y + (a.h - h) / 2 - 40 + off)}px`;
-    el.innerHTML = `<div class="titlebar"><span class="tb-side"></span><span class="t"></span>
+    el.style.cssText = `width:${w}px;height:${h}px;left:${Math.max(a.x + 8, a.x + (a.w - w) / 2 - 70 + off)}px;top:${Math.max(a.y + 8, a.y + (a.h - h) / 2 - 40 + off)}px`;
+    el.innerHTML = `<div class="titlebar"><span class="tb-side">${tile(icon, 16)}</span><span class="t"></span>
       <div class="wctl"><button class="mn" title="Minimize">${glyph('min', 14)}</button><button class="mx" title="Maximize">${glyph('max', 11)}</button><button class="x" title="Close">${glyph('close', 13)}</button></div></div>
       <div class="body"></div><div class="shield"></div><div class="resize"></div>`;
     el.querySelector('.t').textContent = title;
@@ -42,14 +42,14 @@ const WM = {
   },
   // Snap zones: top edge = maximize, left/right edge = half screen.
   zone(x, y) {
-    if (y <= TOPBAR_H + 2) return 'max';
-    if (x <= 2) return 'left';
+    if (y <= WA.top + 2) return 'max';
+    if (x <= WA.left + 2) return 'left';
     if (x >= innerWidth - 3) return 'right';
     return null;
   },
   zoneRect(z) {
     const a = area(), hw = a.w / 2;
-    return { max: [0, a.y, a.w, a.h], left: [0, a.y, hw, a.h], right: [hw, a.y, hw, a.h] }[z];
+    return { max: [a.x, a.y, a.w, a.h], left: [a.x, a.y, hw, a.h], right: [a.x + hw, a.y, hw, a.h] }[z];
   },
   drag(win, handle, resize) {
     const el = win.el;
@@ -67,11 +67,11 @@ const WM = {
           const [rw, rh] = win.restore || [r.width, r.height];
           this.toggleMax(win, false); win.restore = null;
           el.style.width = rw + 'px'; el.style.height = rh + 'px';
-          r = { left: ev.clientX - rw * ((sx - r.left) / r.width), top: TOPBAR_H, width: rw, height: rh }; sx = ev.clientX; sy = ev.clientY;
+          r = { left: ev.clientX - rw * ((sx - r.left) / r.width), top: WA.top, width: rw, height: rh }; sx = ev.clientX; sy = ev.clientY;
         }
         moved = true;
         if (resize) { el.style.width = Math.max(280, r.width + dx) + 'px'; el.style.height = Math.max(180, r.height + dy) + 'px'; return; }
-        el.style.left = r.left + dx + 'px'; el.style.top = Math.min(Math.max(TOPBAR_H, r.top + dy), innerHeight - 60) + 'px';
+        el.style.left = r.left + dx + 'px'; el.style.top = Math.min(Math.max(WA.top, r.top + dy), innerHeight - 60) + 'px';
         z = this.zone(ev.clientX, ev.clientY);
         if (z) { const [x, y, w, h] = this.zoneRect(z); Object.assign(preview.style, { left: x + 6 + 'px', top: y + 6 + 'px', width: w - 12 + 'px', height: h - 12 + 'px' }); if (!preview.isConnected) document.getElementById('desktop').appendChild(preview); }
         else preview.remove();

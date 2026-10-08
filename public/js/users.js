@@ -134,8 +134,14 @@ const Greeter = {
       e.preventDefault();
       if (p.value && p.value !== p2.value) { $('#g-msg').textContent = "Passwords don't match."; return p2.focus(); }
       const u = await Users.create(n.value, p.value);
-      first ? this.done(u) : this.prompt(u);
+      first ? this.pickStyle(u) : this.prompt(u);
     };
+  },
+  // First boot: choose how the desktop looks (changeable later in Settings → Desktop).
+  pickStyle(u) {
+    $('#g-main').innerHTML = `<div class="g-card g-setup g-style"><div class="g-setup-head"><h2>Choose your desktop</h2><p>You can change this, or mix parts of each, any time in Settings → Desktop.</p></div>
+      <div class="style-grid">${Object.entries(SHELL_PRESETS).map(([id, p]) => `<button class="style-card" data-shell="${id}">${shellPreview(p)}<b>${esc(p.name)}</b><small>${p.family}</small></button>`).join('')}</div></div>`;
+    $('#g-main').onclick = e => { const b = e.target.closest('[data-shell]'); if (!b) return; $('#g-main').onclick = null; OS.set({ shell: b.dataset.shell, themeName: null, wall: null, accent: null }); this.done(u); };
   },
   done(u, unlocking) {
     OS.user = u.user; OS.account = u;

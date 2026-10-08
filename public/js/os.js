@@ -12,7 +12,7 @@ const WALLPAPERS = {
 };
 const ACCENTS = ['#3b82f6', '#6366f1', '#14b8a6', '#22c55e', '#f59e0b', '#ef4444', '#ec4899', '#71717a'];
 const DEFAULT_DOCK = ['browser', 'files', 'terminal', 'games', 'vm', 'store', 'settings'];
-const FLYOUTS = ['#quick', '#calendar', '#ctx-menu', '#launcher'];
+const FLYOUTS = ['#quick', '#calendar', '#ctx-menu', '#launcher', '#startmenu'];
 const fmtTime = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 const OS = {
@@ -20,10 +20,12 @@ const OS = {
   load() { try { this.cfg = JSON.parse(localStorage.getItem('novaos.cfg')) || {}; } catch (e) {} this.apply(); },
   set(p) { Object.assign(this.cfg, p); try { localStorage.setItem('novaos.cfg', JSON.stringify(this.cfg)); } catch (e) {} this.apply(); },
   apply() {
-    const wall = this.cfg.wall || WALLPAPERS.Graphite, accent = this.cfg.accent || ACCENTS[0];
+    const t = typeof Shell !== 'undefined' ? Shell.theme() : null;
+    const wall = this.cfg.wall || t?.wall || WALLPAPERS.Graphite, accent = this.cfg.accent || t?.accent || ACCENTS[0];
     $('#desktop').style.background = wall; $('#greeter').style.background = wall;
     document.documentElement.style.setProperty('--accent', accent);
     document.documentElement.dataset.theme = this.cfg.theme || 'dark';
+    if (typeof Shell !== 'undefined' && $('#topbar').dataset.ready) Shell.apply();
     // brightness + night light are real display filters
     const f = [];
     if ((this.cfg.brightness ?? 100) < 100) f.push(`brightness(${Math.max(30, this.cfg.brightness)}%)`);
@@ -85,7 +87,8 @@ const OS = {
 
   enterDesktop(unlocking) {
     $('#desktop').classList.remove('hidden');
-    this.renderDock(); this.renderTop();
+    Shell.apply();
+    if (Shell.current().cli) Shell.showCli(); else this.set({ lastGui: this.cfg.shell || 'gnome' });
     if (!unlocking) {
       const greet = new Date().getHours(); this.toast(`Good ${greet < 12 ? 'morning' : greet < 18 ? 'afternoon' : 'evening'}, ${this.account.name.split(' ')[0]}.`);
       if (this.afterLogin) { const f = this.afterLogin; this.afterLogin = null; f(); }
@@ -95,8 +98,12 @@ const OS = {
   initDesktop() {
     document.querySelectorAll('.mark-slot').forEach(s => s.appendChild($('#mark-tpl').content.cloneNode(true)));
     $('#l-icon').innerHTML = glyph('search', 16);
-    $('#tb-status').innerHTML = `<span class="dot" id="px-dot" title="Proxy"></span>${glyph('wifi', 15)}${glyph('volume', 15)}${glyph('power', 15)}`;
-    WM.onChange = () => { this.renderDock(); this.renderTop(); };
+    $('#topbar').dataset.ready = 1;
+    WM.onChange = () => { this.renderDock(); if (Shell.current().top === 'mac') Shell.renderTop(); else this.renderTop(); Shell.renderTaskbar(); };
+    $('#topbar').onclick = e => Shell.topClick(e);
+    $('#taskbar').onclick = e => Shell.taskbarClick(e);
+    $('#taskbar').oncontextmenu = $('#dock').oncontextmenu = e => this.dockMenu(e);
+    $('#startmenu').onclick = e => Shell.startClick(e);
 
     this.renderIcons = () => {
       const ids = ['browser', 'games', 'vm', 'linux', 'store', 'files', 'terminal', ...Object.keys(ALL_APPS).filter(id => id.startsWith('web:'))];
@@ -110,14 +117,9 @@ const OS = {
     $('#dock').onclick = e => {
       const b = e.target.closest('[data-dock]'); if (!b) return;
       if (b.dataset.dock === '@apps') return this.openLauncher();
-      const wins = this.groupWins(b.dataset.dock);
-      if (!wins.length) return this.launch(b.dataset.dock);
-      const top = wins[0];
-      if (top.el.classList.contains('focused') && wins.length === 1) WM.minimize(top.id);
-      else if (top.el.classList.contains('focused')) WM.focus(wins[wins.length - 1].id); // cycle through the app's windows
-      else WM.focus(top.id);
+      this.activate(b.dataset.dock);
     };
-    $('#dock').oncontextmenu = e => {
+    this.dockMenu = e => {
       const b = e.target.closest('[data-dock]'); if (!b || b.dataset.dock === '@apps') return; e.preventDefault();
       const id = b.dataset.dock, wins = this.groupWins(id), pinned = this.dock().includes(id), r = b.getBoundingClientRect();
       const items = [];
@@ -127,10 +129,6 @@ const OS = {
       this.menu($('#ctx-menu'), items, r.left, r.top - 12 - items.length * 34);
     };
 
-    // Top bar
-    $('#act-btn').onclick = () => $('#launcher').classList.contains('hidden') ? this.openLauncher() : this.closeFlyouts();
-    $('#tb-clock').onclick = () => this.toggle('#calendar') && this.renderCalendar();
-    $('#tb-status').onclick = () => this.toggle('#quick') && this.renderQuick();
 
     // Launcher
     $('#l-input').oninput = () => this.renderLauncher();
@@ -141,7 +139,7 @@ const OS = {
     $('#launcher').onclick = e => { const c = e.target.closest('.app-cell'); if (c) return this.launch(c.dataset.id); if (e.target.id === 'web-search') return this.launch('browser', toUrl($('#l-input').value)); if (!e.target.closest('.l-search')) this.closeFlyouts(); };
 
     document.addEventListener('pointerdown', e => {
-      if (!e.target.closest('.flyout,#launcher,#topbar,#dock')) this.closeFlyouts();
+      if (!e.target.closest('.flyout,#launcher,#topbar,#dock,#taskbar')) this.closeFlyouts();
       else if (!e.target.closest('#ctx-menu')) $('#ctx-menu').classList.add('hidden');
     });
 
@@ -160,7 +158,8 @@ const OS = {
     addEventListener('keydown', e => {
       if ($('#desktop').classList.contains('hidden')) return;
       if (this.cfg.panicKey && e.key === this.cfg.panicKey && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return location.replace(this.cfg.panicUrl || 'https://classroom.google.com');
-      if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); $('#launcher').classList.contains('hidden') ? this.openLauncher() : this.closeFlyouts(); }
+      if (!$('#cli').classList.contains('hidden')) return;
+      if (e.ctrlKey && e.code === 'Space') { e.preventDefault(); $('#launcher').classList.contains('hidden') && $('#startmenu').classList.contains('hidden') ? this.openLauncher() : this.closeFlyouts(); }
       else if (e.altKey && e.code === 'Backquote') { e.preventDefault(); WM.cycle(); }
       else if (e.altKey && e.key.toLowerCase() === 'w') { const w = WM.focused(); if (w) { e.preventDefault(); WM.close(w.id); } }
       else if (e.altKey && e.key.toLowerCase() === 't') { e.preventDefault(); this.launch('terminal'); }
@@ -168,18 +167,37 @@ const OS = {
       else if (e.key === 'Escape') this.closeFlyouts();
     });
 
-    const tick = () => {
-      const d = new Date(), date = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-      $('#tb-clock').textContent = `${date}  ${fmtTime(d)}`; $('#g-clock').textContent = `${date}  ${fmtTime(d)}`;
+    this.tick = () => {
+      const d = new Date(), date = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' }), clk = $('#tb-clock'), s = Shell.current();
+      if (clk) {
+        if (['win11', 'win10'].includes(s.bottom) && s.top === 'none') clk.innerHTML = `${fmtTime(d)}<br>${d.toLocaleDateString()}`;
+        else if (s.bottom === 'kde' && s.top === 'none') clk.innerHTML = `${fmtTime(d)}<br>${d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}`;
+        else clk.textContent = s.top === 'mac' ? `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}  ${fmtTime(d)}` : `${date}  ${fmtTime(d)}`;
+        clk.classList.toggle('has-notes', !!this.notes.length);
+      }
+      $('#g-clock').textContent = `${date}  ${fmtTime(d)}`;
       $('#g-lock-time').textContent = fmtTime(d).replace(/\s?[AP]M$/i, ''); $('#g-lock-date').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
     };
-    tick(); setInterval(tick, 1000);
-    addEventListener('resize', () => { for (const w of WM.wins.values()) if (w.el.offsetTop < TOPBAR_H) w.el.style.top = TOPBAR_H + 'px'; });
+    this.tick(); setInterval(this.tick, 1000);
+    addEventListener('resize', () => { for (const w of WM.wins.values()) if (w.el.offsetTop < WA.top) w.el.style.top = WA.top + 'px'; });
   },
 
   // Windows for a dock entry, newest-focused first. Entries are app ids, or a window id for app-less windows.
   groupWins(key) { return WM.byZ().filter(w => (w.appId || w.id) === key); },
+  // Dock/taskbar click: launch, focus, cycle through the app's windows, or minimize.
+  activate(key) {
+    const wins = this.groupWins(key);
+    if (!wins.length) return this.launch(key);
+    const top = wins[0], focused = top.el.classList.contains('focused') && !top.el.classList.contains('min');
+    if (focused && wins.length === 1) WM.minimize(top.id);
+    else if (focused) WM.focus(wins[wins.length - 1].id);
+    else WM.focus(top.id);
+  },
   renderDock() {
+    const bottom = typeof Shell !== 'undefined' ? Shell.current().bottom : 'dock', dock = $('#dock');
+    dock.classList.toggle('hidden', !bottom.startsWith('dock'));
+    dock.dataset.kind = bottom;
+    if (!bottom.startsWith('dock')) return;
     const pinned = this.dock(), running = [];
     for (const w of WM.byZ().reverse()) { const k = w.appId || w.id; if (!pinned.includes(k) && !running.includes(k)) running.push(k); }
     const item = k => {
@@ -193,9 +211,11 @@ const OS = {
   },
   renderTop() {
     const w = WM.focused(), el = $('#tb-app');
+    if (!el) return; // no top bar in this desktop style
     el.innerHTML = w ? `${tile(w.icon, 16)}<span>${esc(w.appId && ALL_APPS[w.appId] ? ALL_APPS[w.appId].name : w.title)}</span>` : '';
   },
   openLauncher() {
+    if (Shell.current().launcher !== 'grid') return Shell.openStart();
     this.closeFlyouts('#launcher'); $('#launcher').classList.remove('hidden');
     $('#l-input').value = ''; this.renderLauncher(); setTimeout(() => $('#l-input').focus(), 30);
   },
@@ -273,8 +293,8 @@ const OS = {
   power(kind) {
     this.closeFlyouts();
     if (kind === 'lock') { Greeter.show(this.user); return; }
-    if (kind === 'logout') { WM.closeAll(); $('#desktop').classList.add('hidden'); Greeter.show(); return; }
-    WM.closeAll(); $('#desktop').classList.add('hidden'); Greeter.hide();
+    if (kind === 'logout') { WM.closeAll(); Shell.hideCli(); $('#desktop').classList.add('hidden'); Greeter.show(); return; }
+    WM.closeAll(); Shell.hideCli(); $('#desktop').classList.add('hidden'); Greeter.hide();
     if (kind === 'restart') Boot.start();
     else $('#off').classList.remove('hidden');
   },

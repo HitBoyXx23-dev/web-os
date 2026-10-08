@@ -186,7 +186,7 @@ const APPS = {
     const print = s => { out.textContent += s + '\n'; body.firstChild.scrollTop = 1e9; };
     const prompt_ = () => ps.textContent = `${OS.user}@hitboy ${cwd === '/' ? '~' : '~' + cwd} $ `;
     const cmds = {
-      help: () => 'ls [dir]   cd <dir>   pwd   cat <file>   echo <text> [> file]\nmkdir <dir>   touch <file>   rm <path>   clear   date   whoami\nopen <app>   apps   neofetch   history',
+      help: () => 'ls [dir]   cd <dir>   pwd   cat <file>   echo <text> [> file]\nmkdir <dir>   touch <file>   rm <path>   clear   date   whoami\nopen <app>   apps   neofetch   history\ndesktops   startx [style]   theme [name]',
       ls: a => FS.list(FS.join(cwd, a[0] || '.')).map(f => f.name + (f.type === 'dir' ? '/' : '')).join('   '),
       cd: a => { const p = FS.join(cwd, a[0] || '/'); if (!FS.isDir(p)) return 'cd: no such directory: ' + a[0]; cwd = p; },
       pwd: () => cwd, cat: a => FS.read(FS.join(cwd, a[0] || '')) ?? 'cat: no such file: ' + a[0],
@@ -205,7 +205,8 @@ const APPS = {
       const line = inp.value.trim(); inp.value = ''; print(ps.textContent + line); if (!line) return;
       hist.push(line); hi = hist.length;
       const [c, ...a] = line.split(/\s+/);
-      const r = cmds[c] ? cmds[c](a) : `nsh: command not found: ${c}`; if (r) print(r); prompt_();
+      const fn = cmds[c] || (window.TERM_EXTRA || {})[c];
+      const r = fn ? fn(a) : `nsh: command not found: ${c}`; if (r) print(r); prompt_();
     };
     body.onclick = () => getSelection().isCollapsed && inp.focus(); print('HitBoy Web-OS shell. Type "help" for commands.\n'); prompt_(); setTimeout(() => inp.focus());
   } },
@@ -309,11 +310,24 @@ const APPS = {
     draw(); loop(win, draw, 2000);
   } },
 
-  settings: { name: 'Settings', icon: realIcon('org.gnome.Settings'), cat: 'System', w: 760, h: 540, run(body, win, page = 'appearance') {
-    const pages = { appearance: ['paint', 'Appearance'], users: ['user', 'Users'], proxy: ['shield', 'Proxy'], privacy: ['lock', 'Privacy'], system: ['settings', 'System'] };
+  settings: { name: 'Settings', icon: realIcon('org.gnome.Settings'), cat: 'System', w: 760, h: 540, run(body, win, page = 'desktop') {
+    const pages = { desktop: ['grid', 'Desktop'], appearance: ['paint', 'Appearance'], users: ['user', 'Users'], proxy: ['shield', 'Proxy'], privacy: ['lock', 'Privacy'], system: ['settings', 'System'] };
     const row = (l, s, ctl) => `<div class="set-row"><div class="l"><span>${l}</span>${s ? `<small>${s}</small>` : ''}</div>${ctl}</div>`;
     const draw = () => {
       const c = OS.cfg; let html = '';
+      if (page === 'desktop') {
+        const cur = Shell.current(), fams = [...new Set(Object.values(SHELL_PRESETS).map(p => p.family))];
+        const sel = (part, label) => row(label, '', `<select data-part="${part}">${Object.entries(SHELL_PARTS[part]).map(([k, n]) => `<option value="${k}" ${cur[part] === k ? 'selected' : ''}>${n}</option>`).join('')}</select>`);
+        html = `<h3>Desktop</h3>
+        ${fams.map(f => `<div class="small muted">${f}</div><div class="style-grid">${Object.entries(SHELL_PRESETS).filter(([, p]) => p.family === f).map(([id, p]) =>
+          `<button class="style-card ${cur.id === id ? 'on' : ''}" data-shell="${id}">${shellPreview(p)}<b>${esc(p.name)}</b></button>`).join('')}</div>`).join('')}
+        <div class="small muted">Theme</div><div class="style-grid">${Object.entries(THEMES).map(([id, t]) => `<button class="style-card ${Shell.theme() === t ? 'on' : ''}" data-themename="${id}"><span class="sp" style="background:${t.wall}"></span><b>${esc(t.name)}</b></button>`).join('')}</div>
+        <h3>Customize${cur.id === 'custom' ? '' : ' <span class="muted small">(changing anything here makes a hybrid of your current style)</span>'}</h3>
+        ${sel('top', 'Top panel')}${sel('bottom', 'Taskbar / dock')}${sel('launcher', 'App launcher')}${sel('chrome', 'Window buttons')}
+        ${row('Window corners', '', `<input type="range" min="0" max="18" value="${OS.cfg.radius ?? parseInt(getComputedStyle(document.documentElement).getPropertyValue('--win-radius'))}" data-radius style="width:160px">`)}
+        ${row('Transparency and blur', '', `<input type="checkbox" class="switch" data-toggle="transparency" ${OS.cfg.transparency === false ? '' : 'checked'}>`)}
+        ${row('Desktop icons', '', `<input type="checkbox" class="switch" data-toggle="desktopIcons" ${OS.cfg.desktopIcons === false ? '' : 'checked'}>`)}`;
+      }
       if (page === 'appearance') html = `<h3>Appearance</h3>
         ${row('Theme', 'Applies to windows, menus and the taskbar', `<div class="seg">${['dark', 'light'].map(t => `<button data-theme="${t}" class="${(c.theme || 'dark') === t ? 'on' : ''}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div>`)}
         ${row('Accent color', '', `<div class="swatches">${ACCENTS.map(a => `<button data-accent="${a}" style="background:${a}" class="${(c.accent || ACCENTS[0]) === a ? 'on' : ''}"></button>`).join('')}</div>`)}
@@ -350,6 +364,8 @@ const APPS = {
     body.onclick = async e => {
       const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
       if (d.page) { page = d.page; return draw(); }
+      if (d.shell) Shell.choose(d.shell);
+      if (d.themename) { OS.set({ themeName: d.themename, accent: null, wall: null }); Shell.apply(); }
       if (d.theme) OS.set({ theme: d.theme }); if (d.accent) OS.set({ accent: d.accent }); if (d.wall) OS.set({ wall: WALLPAPERS[d.wall] });
       if (d.proxy) OS.set({ proxy: d.proxy === 'on' });
       if (d.engine) OS.set({ engine: d.engine });
@@ -369,7 +385,12 @@ const APPS = {
       if (b.classList.contains('rs') && confirm('Erase everything stored by HitBoy Web-OS in this browser?')) { Object.keys(localStorage).filter(k => k.startsWith('novaos.')).forEach(k => localStorage.removeItem(k)); location.reload(); }
       draw();
     };
-    body.onchange = e => { if (e.target.classList.contains('ck')) OS.set({ cloak: e.target.value }); };
+    body.onchange = e => {
+      if (e.target.classList.contains('ck')) OS.set({ cloak: e.target.value });
+      if (e.target.dataset.part) { Shell.customize({ [e.target.dataset.part]: e.target.value }); draw(); }
+      if (e.target.dataset.toggle) { OS.set({ [e.target.dataset.toggle]: e.target.checked }); Shell.apply(); }
+    };
+    body.oninput = e => { if (e.target.dataset.radius !== undefined) { OS.set({ radius: +e.target.value }); Shell.apply(); } };
     draw();
   } },
 

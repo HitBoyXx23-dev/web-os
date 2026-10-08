@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/os.css">
+<link rel="stylesheet" href="css/shells.css">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#000000">
 <link rel="apple-touch-icon" href="icons/app-192.png">
@@ -48,14 +49,13 @@
 </div>
 
 <div id="desktop" class="hidden">
-  <div id="topbar">
-    <div class="tb-left"><button class="tb-pill" id="act-btn">Activities</button><span id="tb-app"></span></div>
-    <button class="tb-pill" id="tb-clock"></button>
-    <div class="tb-right"><button class="tb-pill" id="tb-status"></button></div>
-  </div>
+  <div id="topbar"></div>
   <div id="icons"></div>
   <div id="windows"></div>
   <div id="dock"></div>
+  <div id="taskbar" class="hidden"></div>
+  <div id="startmenu" class="flyout hidden"></div>
+  <div id="cli" class="hidden"></div>
 
   <div id="launcher" class="hidden">
     <div class="l-search"><span id="l-icon"></span><input id="l-input" placeholder="Type to search" spellcheck="false" autocomplete="off"></div>
@@ -84,6 +84,7 @@
 <script src="js/apps.js"></script>
 <script src="js/vmbox.js"></script>
 <script src="js/users.js"></script>
+<script src="js/shells.js"></script>
 <script src="js/os.js"></script>
 </body>
 </html>
