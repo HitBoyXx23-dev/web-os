@@ -139,7 +139,8 @@ const APPS = {
     };
     const open = (p, withApp) => {
       if (FS.isDir(p)) { cwd = p; sel = null; return draw(); }
-      const app = withApp || { text: 'notepad', image: 'viewer', pdf: 'viewer', media: 'media' }[kindOf(p)];
+      const runnable = runnersFor(p).length && (!['text', 'image', 'media', 'pdf'].includes(kindOf(p)) || /\.(py|swf)$/i.test(p));
+      const app = withApp || (runnable ? 'run' : { text: 'notepad', image: 'viewer', pdf: 'viewer', media: 'media' }[kindOf(p)]);
       if (app) OS.launch(app, p); else download(p);
     };
     const download = p => { const a = document.createElement('a'); a.href = URL.createObjectURL(FS.blob(p)); a.download = FS.base(p); a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); };
@@ -151,6 +152,7 @@ const APPS = {
     };
     const menu = (p, x, y) => {
       const isDir = FS.isDir(p), items = [['open', 'Open', () => open(p)]];
+      if (!isDir && runnersFor(p).length) items.push(['forward', 'Run…', () => open(p, 'run')]);
       if (!isDir) items.push(['notepad', 'Open with Text Editor', () => open(p, 'notepad')], ['paint', 'Open with Image Viewer', () => open(p, 'viewer')], ['media', 'Open with Videos', () => open(p, 'media')], ['download', 'Download', () => download(p)]);
       items.push('-', ['notepad', 'Rename…', () => rename(p)], ['trash', 'Delete', () => remove(p)]);
       OS.menu($('#ctx-menu'), items, x, y);

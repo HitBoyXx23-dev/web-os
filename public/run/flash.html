@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Flash Player</title>
+<style>html, body { margin: 0; height: 100%; background: #000; overflow: hidden; } ruffle-player, ruffle-object, embed { width: 100%; height: 100%; display: block; }
+#msg { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #aaa; font: 13px system-ui, sans-serif; }</style></head>
+<body><div id="msg">Loading Ruffle…</div>
+<script>window.RufflePlayer = window.RufflePlayer || {}; window.RufflePlayer.config = { autoplay: 'on', unmuteOverlay: 'hidden', letterbox: 'on', contextMenu: 'rightClickOnly' };</script>
+<script src="https://cdn.jsdelivr.net/npm/@ruffle-rs/ruffle@0.7.1/ruffle.js" onerror="msg.textContent = 'Could not load the Flash emulator (Ruffle).'"></script>
+<script>
+  // Plays a .swf the OS passes as a blob: URL, using Ruffle (an open-source Flash Player emulator).
+  const src = new URLSearchParams(location.search).get('src');
+  if (window.RufflePlayer && src && src.startsWith('blob:' + location.origin)) {
+    msg.remove();
+    const player = RufflePlayer.newest().createPlayer(); document.body.appendChild(player);
+    player.ruffle().load({ url: src }).catch(e => { document.body.innerHTML = '<div id="msg">This file could not be played: ' + e + '</div>'; });
+  }
+</script>
+</body></html>

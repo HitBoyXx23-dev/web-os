@@ -453,3 +453,8 @@ canvas { display: block; max-width: 100%; }
 .g-style { width: min(760px, 94vw); }
 .g-style .style-card { background: rgba(255, 255, 255, .06); color: #fff; }
 .g-style .style-card small { color: rgba(255, 255, 255, .55); }
+/* Run */
+.runapp { height: 100%; }
+.run-drop { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; padding: 30px; border: 2px dashed var(--line-2); border-radius: 14px; margin: 16px; box-sizing: border-box; height: calc(100% - 32px); }
+.run-drop p { max-width: 460px; }
+.runapp .card { cursor: default; }

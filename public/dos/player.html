@@ -16,14 +16,18 @@
   // Runs one js-dos bundle from this folder: player.html?game=doom
   // Right-click is a game control (Doom fires with it), so keep the browser menu out of the way.
   addEventListener('contextmenu', e => e.preventDefault());
-  const game = new URLSearchParams(location.search).get('game');
-  if (window.Dos && /^[a-z0-9]+$/.test(game || '')) {
+  // ?game=doom plays a bundled game; ?bundle=<blob: URL> plays a bundle the OS built from your own files.
+  (() => { // own scope: js-dos defines short global names
+  const params = new URLSearchParams(location.search), game = params.get('game'), bundle = params.get('bundle');
+  const url = /^[a-z0-9]+$/.test(game || '') ? game + '.jsdos' : bundle && bundle.startsWith('blob:' + location.origin) ? bundle : null;
+  if (window.Dos && url) {
     document.getElementById('msg').remove();
     Dos(document.getElementById('dos'), {
-      url: game + '.jsdos', pathPrefix: 'https://cdn.jsdelivr.net/npm/js-dos@8.5.3/dist/emulators/',
+      url, pathPrefix: 'https://cdn.jsdelivr.net/npm/js-dos@8.5.3/dist/emulators/',
       autoStart: true, kiosk: true, theme: 'dark', noCloud: true, noNetworking: true,
     });
   }
+  })();
 </script>
 </body>
 </html>

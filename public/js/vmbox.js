@@ -87,9 +87,16 @@ const VMBox = {
       try { c.net_device = { type: t.net || 'ne2k', relay_url: WebProxy.wispUrl().replace(/^ws(s?):/, 'wisp$1:') }; } catch (e) {}
     }
     if (FS.exists(statePath(vm))) c.initial_state = { buffer: FS.bytes(statePath(vm)).buffer }; // your saved state wins
-    return c;
+    if (vm.fresh) delete c.initial_state; // boot from disk, e.g. so Windows sees an extra drive
+    return Object.assign(c, vm.extra);
   },
 
+  // A one-off machine that isn't saved in the list (used by Run to boot Windows with your files on D:).
+  startTemp(vm) {
+    const t = tpl(vm.template); vm = { id: 'tmp' + Date.now().toString(36), memory: t.memory, network: true, ...vm };
+    WM.open({ title: `${vm.name} [Running]`, icon: vmIconOf(t), w: 900, h: 640, content: (body, w) => VMWindow(body, w, vm) });
+    if (vm.note) OS.toast(vm.note);
+  },
   start(id) {
     const vm = this.get(id), t = tpl(vm.template);
     if (t.external) { open(BASE + t.external, '_blank'); return; }
@@ -131,7 +138,7 @@ function VMWindow(body, win, vm) {
     emu.add_listener('download-error', () => st('A disk image could not be downloaded. Check your connection.'));
     emu.add_listener('emulator-started', () => {
       st('Running');
-      if (t.after) setTimeout(() => emu.serial0_send(t.after), 1500); // e.g. renew the DHCP lease after a snapshot restore
+      if (t.after && !vm.fresh) setTimeout(() => emu.serial0_send(t.after), 1500); // e.g. renew the DHCP lease after a snapshot restore
     });
     win.cleanup.push(() => { try { emu.destroy(); } catch (e) {} });
   };
@@ -150,6 +157,7 @@ function VMWindow(body, win, vm) {
     if (a === 'save') {
       st('Saving state…'); await emu.stop();
       const s = new Uint8Array(await emu.save_state());
+      if (vm.id.startsWith('tmp')) { OS.toast('This one-off machine can’t save its state.'); return st('Running'); }
       try { FS.writeBytes(statePath(vm), s, 'application/octet-stream'); VMBox.update(vm.id, { savedAt: Date.now() }); OS.toast(`Saved the state of ${vm.name} (${fmtMB(s.length)})`); }
       catch (err) { OS.toast('Could not save the state: ' + err.message); }
       WM.close(win.id);

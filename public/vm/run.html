@@ -30,8 +30,14 @@
   screen.addEventListener('pointerdown', () => screen.focus());
   // Like VirtualBox: click a graphical guest to capture the mouse, Esc releases it.
   screen.querySelector('canvas').addEventListener('click', e => e.target.requestPointerLock?.());
+  // Buffers made by the parent window are a different realm's ArrayBuffer, which v86's
+  // `instanceof ArrayBuffer` checks reject, so copy them into this frame's realm.
+  const adopt = cfg => {
+    for (const v of Object.values(cfg)) if (v && typeof v === 'object' && Object.prototype.toString.call(v.buffer) === '[object ArrayBuffer]' && !(v.buffer instanceof ArrayBuffer)) v.buffer = structuredClone(v.buffer);
+    return cfg;
+  };
   window.boot = config => {
-    const emu = new V86({ ...config, wasm_path: '../v86/v86.wasm', bios: { url: '../v86/seabios.bin' }, vga_bios: { url: '../v86/vgabios.bin' },
+    const emu = new V86({ ...adopt(config), wasm_path: '../v86/v86.wasm', bios: { url: '../v86/seabios.bin' }, vga_bios: { url: '../v86/vgabios.bin' },
       screen_container: screen, autostart: true });
     emu.add_listener('screen-set-size', () => setTimeout(fit, 50));
     window.emu = emu; // handy for debugging from the console

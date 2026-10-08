@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Python</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0b0c; color: #d4d4d8; font: 13px/1.55 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; }
+  #out { padding: 12px 14px; white-space: pre-wrap; word-break: break-word; height: 100%; box-sizing: border-box; overflow: auto; margin: 0; }
+  .err { color: #f87171; } .sys { color: #71717a; }
+</style></head>
+<body><pre id="out"><span class="sys">Starting Python…</span>
+</pre>
+<script src="https://cdn.jsdelivr.net/npm/pyodide@0.29.5/pyodide.js"></script>
+<script>
+  // Runs a .py file with Pyodide (CPython compiled to WebAssembly). input() asks with a prompt dialog.
+  const out = document.getElementById('out');
+  const write = (text, cls) => { const s = document.createElement('span'); if (cls) s.className = cls; s.textContent = text; out.appendChild(s); out.scrollTop = 1e9; };
+  (async () => {
+    const src = new URLSearchParams(location.search).get('src');
+    if (!src || !src.startsWith('blob:' + location.origin)) return write('Nothing to run.\n', 'err');
+    try {
+      const code = await (await fetch(src)).text();
+      const py = await loadPyodide();
+      out.textContent = ''; write(`Python ${py.runPython("import sys; sys.version.split()[0]")} (Pyodide ${py.version})\n\n`, 'sys');
+      py.setStdout({ batched: s => write(s + '\n') }); py.setStderr({ batched: s => write(s + '\n', 'err') });
+      py.setStdin({ stdin: () => prompt('Python input:') ?? '' });
+      await py.loadPackagesFromImports(code);
+      await py.runPythonAsync(code);
+      write('\n[program finished]\n', 'sys');
+    } catch (e) { write('\n' + e.message + '\n', 'err'); }
+  })();
+</script>
+</body></html>
