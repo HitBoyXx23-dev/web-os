@@ -88,6 +88,15 @@ const OS = {
   },
 
   enterDesktop(unlocking) {
+    if (this.pendingRelay) {
+      const r = this.pendingRelay; this.pendingRelay = null;
+      setTimeout(async () => {
+        if (!confirm(`Connect HitBoy Web-OS to the relay at ${new URL(r.replace(/^ws/, 'http')).host}?\n\nWebsites you open through the proxy, Live Chat and multiplayer will go through it. Only accept if you started it yourself (npm run home).`)) return;
+        this.set({ wisp: r + '/wisp/', partyServer: r });
+        try { await WebProxy.ready(); await WebProxy.setTransport(); } catch (e) {}
+        this.toast('Connected to your relay'); this.updateProxyDot();
+      }, 600);
+    }
     $('#desktop').classList.remove('hidden');
     Shell.apply();
     if (Shell.current().cli) { if (unlocking && Shell.cliActive()) $('#cli input')?.focus(); else Shell.showCli(); } else this.set({ lastGui: this.cfg.shell || 'hitboy' });
@@ -305,6 +314,8 @@ const OS = {
 };
 
 OS.load();
+// One-click relay setup: <site>/#relay=wss://… (printed by `npm run home`). Asks before switching.
+{ const m = location.hash.match(/relay=([^&]+)/); if (m) { const r = decodeURIComponent(m[1]).replace(/\/+$/, ''); if (/^wss?:\/\/[^/\s]+$/.test(r)) OS.pendingRelay = r; history.replaceState(null, '', location.pathname + location.search); } }
 // HitBoy's own sites come installed (once, so uninstalling them sticks).
 if (!OS.cfg.hitboySites) OS.set({ installed: [...new Set([...(OS.cfg.installed || []), ...HITBOY_SITES.map(x => x.id)])], hitboySites: 1 });
 OS.syncApps(); OS.initDesktop();

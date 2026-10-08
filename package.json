@@ -6,6 +6,7 @@
   "description": "HitBoy Web-OS — a web OS with games, apps, a proxy browser and a Virtual PC",
   "scripts": {
     "start": "node server.js",
+    "home": "node scripts/home.js",
     "vendor": "node scripts/vendor.js",
     "dos-bundles": "node scripts/dos-bundles.js"
   },

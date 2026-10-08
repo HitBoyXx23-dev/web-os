@@ -340,10 +340,11 @@ const APPS = {
         ${row('Connection', 'Encrypted end to end. Automatic uses libcurl.js and switches a site to Epoxy if its connection fails there (for example "SSL connect error").', `<div class="seg">${Object.entries(WebProxy.TRANSPORTS).map(([k, n]) => `<button data-transport="${k}" class="${WebProxy.transport() === k ? 'on' : ''}">${n}</button>`).join('')}</div>`)}
         ${row('Use proxy in Browser', 'Routes pages through the proxy so blocked sites can load', `<div class="seg">${['on', 'off'].map(v => `<button data-proxy="${v}" class="${(c.proxy !== false) === (v === 'on') ? 'on' : ''}">${v === 'on' ? 'On' : 'Off'}</button>`).join('')}</div>`)}
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Wisp server</span><small>Leave blank to pick automatically: this site's own server if it has one (<code>npm start</code>), otherwise a free public server. Sites like YouTube, Reddit and TikTok often block shared public servers — for the best results run your own (see the README: Render, or your own computer at home).</small></div>
-        <div class="row"><input class="ws grow" placeholder="Automatic" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
+        <div class="row"><input class="ws grow" placeholder="Automatic — or several, separated by spaces (first that answers is used)" value="${esc(c.wisp || '')}"><button class="primary wb">Save</button></div></div>
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Live server</span><small>For Live Chat, streams and multiplayer games. Leave blank to use this site. On Vercel, enter the address of a HitBoy Web-OS server (for example <code>wss://your-app.onrender.com</code>).</small></div>
         <div class="row"><input class="pss grow" placeholder="This site" value="${esc(c.partyServer || '')}"><button class="primary psb">Save</button></div></div>
-        <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>`;
+        <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>
+        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="row"><div class="l grow"><span>Proxy test</span><small>Checks your relays, then loads well-known sites through the proxy and explains anything that fails.</small></div><button class="pt-run">Run test</button></div><div class="pt-out"></div></div>`;
       if (page === 'privacy') html = `<h3>Privacy</h3>
         ${row('Tab disguise', 'Changes the browser tab title and icon', `<select class="ck">${Object.keys(CLOAKS).map(k => `<option ${(c.cloak || 'None') === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`)}
         ${row('Open in about:blank', 'Runs HitBoy Web-OS inside a blank tab that stays out of your history', `<button class="blank">${glyph('external', 14)}Open</button>`)}
@@ -384,6 +385,7 @@ const APPS = {
         await Users.setPassword(OS.user, a); OS.account = Users.get(OS.user); OS.toast(a ? 'Password changed' : 'Password removed');
       }
       if (b.classList.contains('ib')) { const u = body.querySelector('.iu').value.trim(); if (u) OS.set({ wall: `url("${u.replace(/["\\]/g, '')}") center/cover` }); }
+      if (b.classList.contains('pt-run')) { b.disabled = true; b.textContent = 'Testing…'; await proxyTest(body.querySelector('.pt-out')); b.disabled = false; b.textContent = 'Run again'; return; }
       if (b.classList.contains('psb')) { OS.set({ partyServer: body.querySelector('.pss').value.trim() }); OS.toast('Live server saved'); }
       if (b.classList.contains('wb')) { OS.set({ wisp: body.querySelector('.ws').value.trim() }); try { await WebProxy.ready(); await WebProxy.setTransport(); OS.toast('Proxy server saved'); } catch (err) { OS.toast(err.message); } }
       if (b.classList.contains('blank')) OS.openBlank(location.href);

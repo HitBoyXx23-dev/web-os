@@ -669,3 +669,7 @@ select option { background: var(--surface-2); color: var(--text); }
 .ai-send { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); align-items: flex-end; }
 .ai-send textarea { flex: 1; resize: none; min-height: 38px; max-height: 160px; padding: 9px 12px; border-radius: 10px; font: inherit; background: var(--surface-2); color: var(--text); border: 1px solid var(--line-2); }
 .store-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 8px; padding: 4px 20px 16px; align-content: start; }
+.pt-out { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.pt-out:empty { display: none; }
+.pt-row { display: grid; grid-template-columns: 10px 140px 1fr; gap: 10px; align-items: center; font-size: 13px; }
+.pt-row b { font-weight: 500; }

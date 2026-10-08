@@ -45,7 +45,9 @@ npm start          # http://localhost:8080
 The proxy reaches sites through a Wisp relay. Which relay you use matters more than anything else:
 - **Free public relay** (the default on Vercel): shared by many sites, so YouTube ("confirm you're not a bot"), Reddit ("blocked by network security"), TikTok and Cloudflare-protected sites often refuse it.
 - **Your own server** (Render, Railway, a VPS): faster and not shared, but still a data-center address that some sites bot-check.
-- **Your own computer at home** — works with the most sites, because traffic leaves from your home internet: run `npm install && npm start`, then expose it with a free tunnel such as `cloudflared tunnel --url http://localhost:8080` and put `wss://<the-tunnel-address>/wisp/` in **Settings → Proxy → Wisp server** (and `wss://<the-tunnel-address>` as the Live server). Your Vercel site keeps working as the front end.
+- **Your own computer at home** — works with the most sites, because traffic leaves from your home internet. Install [Node.js](https://nodejs.org), then run `npm install` and `npm run home -- https://your-site.vercel.app` (on Windows you can double-click `start-home.cmd`). It starts HitBoy Web-OS with its relay, opens a free Cloudflare tunnel, and prints a one-click link that connects your Vercel site to it (you'll be asked to confirm). Keep the window open; the address changes each time.
+
+You can list several relays in **Settings → Proxy → Wisp server** (separated by spaces); the first one that answers is used. **Settings → Proxy → Proxy test** checks your relays and loads well-known sites through the proxy, telling you when a site is blocking the relay (YouTube's "confirm you're not a bot", Reddit, Cloudflare checks).
 
 In **Settings → Proxy**, the **HitBoy Proxy** page engine (the default) uses Scramjet and automatically switches a site to Ultraviolet when it fails there, and remembers it.
 
