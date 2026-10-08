@@ -32,11 +32,12 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const Boot = {
   ENTRIES: [
-    { label: 'NovaOS', run: () => Boot.splash() },
-    { label: 'NovaOS (safe graphics)', run: () => { OS.set({ theme: 'dark' }); Boot.splash(); } },
-    { label: 'NovaOS Linux terminal', run: () => { OS.afterLogin = () => OS.launch('linux'); Boot.splash(); } },
-    { label: 'Virtual PC: Windows 98', run: () => { OS.afterLogin = () => APPS.vm.boot('windows98'); Boot.splash(); } },
-    { label: 'Virtual PC: Windows 2000', run: () => { OS.afterLogin = () => APPS.vm.boot('windows2000'); Boot.splash(); } },
+    { label: 'HitBoy Web-OS', run: () => Boot.splash() },
+    { label: 'HitBoy Web-OS (safe graphics)', run: () => { OS.set({ theme: 'dark' }); Boot.splash(); } },
+    { label: 'HitBoy Web-OS Linux terminal', run: () => { OS.afterLogin = () => OS.launch('linux'); Boot.splash(); } },
+    { label: 'Ubuntu 18.04 LTS (VMBox)', run: () => { OS.afterLogin = () => OS.launch('vm', 'ubuntu18'); Boot.splash(); } },
+    { label: 'Arch Linux (VMBox)', run: () => { OS.afterLogin = () => OS.launch('vm', 'arch'); Boot.splash(); } },
+    { label: 'Windows 98 (VMBox)', run: () => { OS.afterLogin = () => OS.launch('vm', 'win98'); Boot.splash(); } },
     { label: 'UEFI Firmware Settings', run: () => { OS.afterLogin = () => OS.launch('settings', 'system'); Boot.splash(); } },
   ],
   start() {
@@ -116,7 +117,7 @@ const Greeter = {
   },
   setup(first) {
     $('#g-main').innerHTML = `<form class="g-card g-setup" id="g-setup">
-      <div class="g-setup-head">${first ? '<h2>Welcome to NovaOS</h2><p>Create your account to get started.</p>' : '<h2>Add account</h2><p>Each account gets its own sign-in.</p>'}</div>
+      <div class="g-setup-head">${first ? '<h2>Welcome to HitBoy Web-OS</h2><p>Create your account to get started.</p>' : '<h2>Add account</h2><p>Each account gets its own sign-in.</p>'}</div>
       <label class="field">Full name<input id="s-name" required maxlength="32" autocomplete="name" spellcheck="false"></label>
       <label class="field">Username<input id="s-user" disabled></label>
       <label class="field"><span>Password <span class="muted">(optional)</span></span><input id="s-pw" type="password" autocomplete="new-password"></label>

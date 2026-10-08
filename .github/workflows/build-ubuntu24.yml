@@ -1,0 +1,26 @@
+# Builds the Ubuntu 24.04 browser image (container2wasm) and commits it to the branch you run it on.
+# Run it from the Actions tab: "Build Ubuntu 24.04" → Run workflow. Takes roughly 30–60 minutes.
+name: Build Ubuntu 24.04
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image
+        run: bash scripts/build-ubuntu24.sh
+      - name: Commit image
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/vm/ubuntu24/image
+          git commit -m "Build Ubuntu 24.04 browser image" || echo "No changes"
+          git push

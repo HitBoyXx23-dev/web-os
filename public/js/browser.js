@@ -23,7 +23,7 @@ const WebProxy = {
   },
   ready() {
     if (!this.supported()) return Promise.reject(new Error(location.protocol === 'file:'
-      ? 'The proxy needs NovaOS to be served over http(s), not opened as a file.'
+      ? 'The proxy needs HitBoy Web-OS to be served over http(s), not opened as a file.'
       : 'This browser does not support service workers.'));
     return this._ready ||= (async () => {
       const { ScramjetController } = $scramjetLoadController();

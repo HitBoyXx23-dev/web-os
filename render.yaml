@@ -2,7 +2,7 @@
 # which is the fastest and most reliable setup for the proxy browser (YouTube, Discord…).
 services:
   - type: web
-    name: novaos
+    name: hitboy-web-os
     runtime: node
     plan: free
     buildCommand: npm install

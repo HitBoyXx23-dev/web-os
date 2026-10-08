@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ubuntu 24.04 — VMBox</title>
+<link rel="stylesheet" href="lib/xterm.css">
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #300a24; color: #eee; font: 13px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+  body { display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: #2c001e; border-bottom: 1px solid #5e2750; }
+  header b { font-weight: 600; }
+  header .st { margin-left: auto; opacity: .75; font-size: 12px; }
+  #term { flex: 1; min-height: 0; padding: 6px 8px; }
+  #term .xterm { height: 100%; }
+  .xterm-viewport { background: #300a24 !important; }
+  #splash { position: fixed; inset: 41px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #300a24; text-align: center; padding: 20px; }
+  .bar { width: min(420px, 80vw); height: 6px; background: #5e2750; border-radius: 3px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: #e95420; transition: width .2s; }
+  .muted { opacity: .7; max-width: 520px; }
+  code { background: #5e2750; padding: 1px 6px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<header><svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#e95420"/><circle cx="12" cy="12" r="5" fill="none" stroke="#fff" stroke-width="2"/><circle cx="5.5" cy="12" r="2" fill="#fff"/><circle cx="15.3" cy="6.4" r="2" fill="#fff"/><circle cx="15.3" cy="17.6" r="2" fill="#fff"/></svg>
+  <b>Ubuntu 24.04 LTS</b><span class="st" id="st">Starting…</span></header>
+<div id="term"></div>
+<div id="splash"><div id="msg">Preparing…</div><div class="bar"><div id="bar"></div></div><div class="muted" id="sub">Real Ubuntu 24.04 (x86-64), emulated in your browser. The first start downloads the system image; after that it's cached.</div></div>
+
+<script src="lib/xterm.js"></script>
+<script src="lib/xterm-pty.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const fail = (msg, sub) => { $('msg').textContent = msg; $('sub').innerHTML = sub || ''; document.querySelector('.bar').remove(); $('st').textContent = 'Stopped'; };
+
+  async function main() {
+    // xterm-pty and the emulator use SharedArrayBuffer, which needs a cross-origin isolated page.
+    if (!self.crossOriginIsolated) {
+      if (navigator.serviceWorker && !sessionStorage.getItem('coi-reload')) {
+        // HitBoy Web-OS's service worker adds the isolation headers to this page; it may need one reload to take control.
+        sessionStorage.setItem('coi-reload', '1');
+        await navigator.serviceWorker.register('../../sw.js', { scope: '../../' }).catch(() => {});
+        await navigator.serviceWorker.ready; location.reload(); return;
+      }
+      return fail("This browser can't isolate the page, which Ubuntu 24.04 needs.", 'Try a current version of Chrome, Edge or Firefox.');
+    }
+    sessionStorage.removeItem('coi-reload');
+
+    let manifest;
+    try { manifest = await (await fetch('image/manifest.json', { cache: 'no-cache' })).json(); }
+    catch (e) { return fail('The Ubuntu 24.04 image has not been built for this site yet.', 'Run the <code>Build Ubuntu 24.04</code> GitHub Actions workflow (or <code>scripts/build-ubuntu24.sh</code>) and redeploy.'); }
+
+    // Download the parts (with progress), join them, then gunzip.
+    $('msg').textContent = 'Downloading Ubuntu…';
+    let loaded = 0; const parts = [];
+    for (const name of manifest.parts) {
+      const res = await fetch('image/' + name);
+      if (!res.ok) return fail('Download failed (' + res.status + ').', name);
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read(); if (done) break;
+        parts.push(value); loaded += value.length;
+        $('bar').style.width = (100 * loaded / manifest.bytes).toFixed(1) + '%';
+        $('st').textContent = `Downloading ${(loaded / 1048576).toFixed(0)} / ${(manifest.bytes / 1048576).toFixed(0)} MB`;
+      }
+    }
+    $('msg').textContent = 'Unpacking…'; $('st').textContent = 'Unpacking';
+    let blob = new Blob(parts);
+    if (manifest.gzip) blob = await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).blob();
+    const wasm = await blob.arrayBuffer();
+
+    $('msg').textContent = 'Booting… (this takes a little while)'; $('st').textContent = 'Booting';
+    const xterm = new Terminal({ fontFamily: '"Ubuntu Mono", "JetBrains Mono", monospace', fontSize: 14, theme: { background: '#300a24' } });
+    xterm.open($('term'));
+    const { master, slave } = openpty();
+    const t = slave.ioctl('TCGETS');
+    t.iflag &= ~(ISTRIP | INLCR | IGNCR | ICRNL | IXON); t.oflag &= ~OPOST; t.lflag &= ~(ECHO | ECHONL | ICANON | ISIG | IEXTEN);
+    slave.ioctl('TCSETS', new Termios(t.iflag, t.oflag, t.cflag, t.lflag, t.cc));
+    xterm.loadAddon(master);
+    const worker = new Worker('lib/worker.js');
+    worker.postMessage({ type: 'init', wasm }, [wasm]);
+    new TtyServer(slave).start(worker);
+    let first = true;
+    xterm.onWriteParsed(() => { if (first) { first = false; $('splash').remove(); $('st').textContent = 'Running'; xterm.focus(); } });
+  }
+  main().catch(e => fail('Something went wrong.', String(e)));
+</script>
+</body>
+</html>

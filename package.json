@@ -1,9 +1,9 @@
 {
-  "name": "novaos",
-  "version": "2.0.0",
+  "name": "hitboy-web-os",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "NovaOS — a web OS with games, apps, a proxy browser and a Virtual PC",
+  "description": "HitBoy Web-OS — a web OS with games, apps, a proxy browser and a Virtual PC",
   "scripts": {
     "start": "node server.js",
     "vendor": "node scripts/vendor.js",
@@ -19,6 +19,7 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
+    "@bokuweb/zstd-wasm": "^0.0.27",
     "fflate": "^0.8.3",
     "v86": "^0.5.470"
   }

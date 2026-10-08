@@ -1,4 +1,4 @@
-/* NovaOS — design tokens */
+/* HitBoy Web-OS — design tokens */
 :root {
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -421,3 +421,32 @@ canvas { display: block; max-width: 100%; }
 .modal-card { width: min(460px, 92%); background: var(--surface); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .list.pick { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
 .list.pick li.dir .gl { color: #f59e0b; }
+/* VMBox */
+.vmbox { display: flex; height: 100%; }
+.vmbox aside { width: 270px; border-right: 1px solid var(--line); background: var(--surface-2); display: flex; flex-direction: column; flex-shrink: 0; }
+.vmbox aside .toolbar { flex-wrap: wrap; background: none; }
+.vm-list { list-style: none; margin: 0; padding: 6px; overflow: auto; flex: 1; }
+.vm-list li { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 8px; }
+.vm-list li:hover { background: var(--hover); }
+.vm-list li.on { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+.vm-list li b { display: block; font-weight: 500; }
+.vm-list li small { color: var(--text-2); font-size: 12px; }
+.vm-list .empty-li { color: var(--text-3); text-align: center; padding: 30px 10px; display: block; }
+.vm-run { color: #22c55e; }
+.vmbox section { flex: 1; overflow: auto; min-width: 0; }
+.vm-head { display: flex; align-items: center; gap: 16px; padding: 20px; }
+.vm-head h3 { font-size: 18px; }
+.vm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; padding: 0 20px 16px; }
+.vm-sec { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.vm-sec h4 { font-size: 12px; color: var(--accent); margin-bottom: 4px; }
+.vm-sec div { display: flex; gap: 8px; font-size: 13px; }
+.vm-sec span { color: var(--text-2); white-space: nowrap; }
+.vm-sec b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; }
+.vm-wiz { width: min(520px, 94%); }
+.vm-wiz select, .vm-wiz input:not([type=checkbox]):not([type=range]) { width: 100%; }
+.vmw { display: flex; flex-direction: column; height: 100%; background: #000; }
+.vmw .toolbar { background: var(--surface-2); flex-wrap: wrap; }
+.vm-screen { flex: 1; border: 0; width: 100%; min-height: 0; background: #000; display: block; }
+.vm-status { display: flex; gap: 14px; align-items: center; padding: 4px 12px; font-size: 11px; color: var(--text-2); background: var(--surface-2); border-top: 1px solid var(--line); white-space: nowrap; overflow: hidden; }
+.vm-hint { color: var(--text-3); }
+.vm-list .empty-li b { display: inline; }

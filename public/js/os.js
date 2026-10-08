@@ -30,7 +30,7 @@ const OS = {
     if (this.cfg.night) f.push('sepia(.35) saturate(1.15) hue-rotate(-12deg)');
     document.body.style.filter = f.join(' ');
     const c = typeof CLOAKS !== 'undefined' && CLOAKS[this.cfg.cloak];
-    document.title = c ? c.title : 'NovaOS';
+    document.title = c ? c.title : 'HitBoy Web-OS';
     let fav = document.querySelector('link[rel=icon]');
     if (!fav) { fav = document.createElement('link'); fav.rel = 'icon'; document.head.appendChild(fav); }
     fav.href = c ? c.icon : 'data:image/svg+xml,' + encodeURIComponent($('#mark-tpl').innerHTML.trim().replace('<svg', `<svg xmlns="http://www.w3.org/2000/svg" style="color:${accent}"`).replace(/currentColor/g, accent));
@@ -62,7 +62,7 @@ const OS = {
     $('#tb-clock')?.classList.toggle('has-notes', !!this.notes.length);
     if (this.cfg.dnd) return;
     document.querySelectorAll('.toast').forEach(t => t.remove());
-    const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = `<b>NovaOS</b><span></span>`; t.querySelector('span').textContent = msg;
+    const t = document.createElement('div'); t.className = 'toast'; t.innerHTML = `<b>HitBoy Web-OS</b><span></span>`; t.querySelector('span').textContent = msg;
     document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
   },
   closeFlyouts(except) {
@@ -255,7 +255,7 @@ const OS = {
     for (let i = m.getDay(); i > 0; i--) cells += `<span class="dim">${prev - i + 1}</span>`;
     for (let i = 1; i <= days; i++) cells += `<span class="${!offset && i === now.getDate() ? 'today' : ''}">${i}</span>`;
     const ago = d => { const s = (Date.now() - d) / 1000; return s < 60 ? 'Just now' : s < 3600 ? Math.floor(s / 60) + ' min ago' : fmtTime(d); };
-    $('#calendar').innerHTML = `<div class="cal-notes">${this.notes.length ? this.notes.map(n => `<div class="note"><div class="note-h"><b>NovaOS</b><span>${ago(n.at)}</span></div>${esc(n.msg)}</div>`).join('') : `<div class="cal-empty">${glyph('volume', 28)}<span>No Notifications</span></div>`}
+    $('#calendar').innerHTML = `<div class="cal-notes">${this.notes.length ? this.notes.map(n => `<div class="note"><div class="note-h"><b>HitBoy Web-OS</b><span>${ago(n.at)}</span></div>${esc(n.msg)}</div>`).join('') : `<div class="cal-empty">${glyph('volume', 28)}<span>No Notifications</span></div>`}
         <div class="cal-foot"><label class="row small"><span>Do Not Disturb</span><input type="checkbox" class="switch" id="cal-dnd" ${this.cfg.dnd ? 'checked' : ''}></label><button class="ghost small" id="cal-clear" ${this.notes.length ? '' : 'disabled'}>Clear</button></div></div>
       <div class="cal-side"><div class="cal-today"><small>${now.toLocaleDateString([], { weekday: 'long' })}</small><b>${now.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</b></div>
         <div class="cal-nav"><button class="icon-btn" data-m="-1">${glyph('back', 14)}</button><span>${m.toLocaleDateString([], { month: 'long', year: 'numeric' })}</span><button class="icon-btn" data-m="1">${glyph('forward', 14)}</button></div>
@@ -282,6 +282,6 @@ const OS = {
 
 OS.load(); OS.syncApps(); OS.initDesktop();
 FS.ready.then(() => Boot.start());
-// Register the service worker right away so NovaOS works offline and can be installed as an app.
+// Register the service worker right away so HitBoy Web-OS works offline and can be installed as an app.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }).catch(() => {});
 OS.updateProxyDot();

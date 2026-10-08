@@ -1,5 +1,5 @@
 // Linux: a real x86 Linux (Buildroot, kernel 6.8) running in the v86 emulator, shown in an xterm.js terminal.
-// Networking goes through the same Wisp server as the proxy; your NovaOS Home folder is shared at /mnt (9p).
+// Networking goes through the same Wisp server as the proxy; your HitBoy Web-OS Home folder is shared at /mnt (9p).
 const XTERM = 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/';
 const LINUX_IMAGE = { url: BASE + 'v86/buildroot-bzimage68.bin', size: 10068480, async: false };
 
@@ -9,7 +9,7 @@ const wispRelay = () => WebProxy.wispUrl().replace(/^ws(s?):/, 'wisp$1:');
 function LinuxApp(body, win) {
   body.style.overflow = 'hidden';
   body.innerHTML = `<div class="linux"><div class="toolbar"><span class="dot" id="lx-dot"></span><span class="small lx-status">Starting…</span><span class="grow"></span>
-      <button class="ghost small lx-sync" disabled title="Copy files from /mnt back to your NovaOS Home folder">${glyph('download', 14)}Save /mnt to Home</button>
+      <button class="ghost small lx-sync" disabled title="Copy files from /mnt back to your HitBoy Web-OS Home folder">${glyph('download', 14)}Save /mnt to Home</button>
       <button class="ghost small lx-restart">${glyph('reload', 14)}Restart</button></div>
     <div class="lx-term"></div></div>`;
   const $l = s => body.querySelector(s), status = (t, ok) => { $l('.lx-status').textContent = t; $l('#lx-dot').className = 'dot ' + (ok === true ? 'ok' : ok === false ? 'bad' : ''); };
@@ -43,23 +43,23 @@ function LinuxApp(body, win) {
           booted = true;
           status(relay ? 'Running · online via ' + new URL(WebProxy.wispUrl()).host : 'Running · offline (no proxy server)', true);
           $l('.lx-sync').disabled = false;
-          emu.serial0_send((relay ? '(udhcpc -q >/dev/null 2>&1 &); ' : '') + 'cd /mnt; clear; echo "NovaOS Linux - your Home folder is shared at /mnt. Try: ls, uname -a, vi, wget"\n');
+          emu.serial0_send((relay ? '(udhcpc -q >/dev/null 2>&1 &); ' : '') + 'cd /mnt; clear; echo "HitBoy Web-OS Linux - your Home folder is shared at /mnt. Try: ls, uname -a, vi, wget"\n');
         }
       });
       win.cleanup.push(() => { try { emu.destroy(); } catch (e) {} });
     } catch (e) { status(e.message, false); }
   };
 
-  // Copy NovaOS Home into the 9p share, and back on request.
+  // Copy HitBoy Web-OS Home into the 9p share, and back on request.
   const enc = new TextEncoder();
   const shareHome = async () => {
     const fs9 = emu.fs9p; if (!fs9) return;
     // Folders first, shallowest first: create_file needs the parent folder to exist.
-    for (const dir of Object.keys(FS.data).filter(p => p !== '/' && FS.isDir(p)).sort((a, b) => a.split('/').length - b.split('/').length)) {
+    for (const dir of Object.keys(FS.data).filter(p => p !== '/' && FS.isDir(p) && !p.includes('/.')).sort((a, b) => a.split('/').length - b.split('/').length)) {
       const r = fs9.SearchPath(dir.slice(1)); if (r.id === -1 && r.parentid !== -1) fs9.CreateDirectory(r.name, r.parentid);
     }
     for (const [path, node] of Object.entries(FS.data)) {
-      if (node.type !== 'file' || path === '/') continue;
+      if (node.type !== 'file' || path === '/' || path.includes('/.')) continue;
       try { await emu.create_file(path.slice(1), FS.bytes(path)); } catch (e) {}
     }
   };

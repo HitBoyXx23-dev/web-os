@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- The public v86 image host refuses requests that carry a Referer from other sites. -->
+<meta name="referrer" content="no-referrer">
+<title>VMBox machine</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  #screen { position: absolute; left: 50%; top: 50%; transform-origin: center; outline: none; }
+  #screen > div { white-space: pre; font: 14px/1 monospace; color: #ccc; }
+  #screen canvas { display: none; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+<div id="screen" tabindex="0"><div></div><canvas></canvas></div>
+<script src="../v86/libv86.js"></script>
+<script>
+  // VMBox (in the parent window) calls boot() with a v86 config and gets the emulator back.
+  // Each machine lives in its own frame so keyboard capture and image requests stay isolated.
+  const screen = document.getElementById('screen');
+  function fit() {
+    const canvas = screen.querySelector('canvas'), text = screen.querySelector('div');
+    const el = canvas.style.display !== 'none' && canvas.width ? canvas : text;
+    const w = el.offsetWidth || 640, h = el.offsetHeight || 400;
+    const s = Math.min(innerWidth / w, innerHeight / h);
+    screen.style.transform = `translate(-50%, -50%) scale(${s > 1 ? Math.floor(s * 4) / 4 || 1 : s})`;
+  }
+  addEventListener('resize', fit); setInterval(fit, 500);
+  screen.addEventListener('pointerdown', () => screen.focus());
+  // Like VirtualBox: click a graphical guest to capture the mouse, Esc releases it.
+  screen.querySelector('canvas').addEventListener('click', e => e.target.requestPointerLock?.());
+  window.boot = config => {
+    const emu = new V86({ ...config, wasm_path: '../v86/v86.wasm', bios: { url: '../v86/seabios.bin' }, vga_bios: { url: '../v86/vgabios.bin' },
+      screen_container: screen, autostart: true });
+    emu.add_listener('screen-set-size', () => setTimeout(fit, 50));
+    window.emu = emu; // handy for debugging from the console
+    screen.focus();
+    return emu;
+  };
+</script>
+</body>
+</html>

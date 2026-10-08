@@ -7,8 +7,8 @@ const FS = {
   ready: null,
   defaults() {
     return { '/': { type: 'dir' }, '/Documents': { type: 'dir' }, '/Pictures': { type: 'dir' }, '/Downloads': { type: 'dir' },
-      '/Documents/readme.txt': { type: 'file', mtime: Date.now(), content: 'Welcome to NovaOS!\n\n- Games has Doom, Wolfenstein 3D and Commander Keen.\n- Linux runs a real x86 Linux; this folder is shared at /mnt/home.\n- Drag files from your computer into Files to upload them.\n' },
-      '/Documents/hello.html': { type: 'file', mtime: Date.now(), content: '<!doctype html>\n<h1 style="font-family:sans-serif">Hello from NovaOS</h1>\n<p>Edit me in Text Editor and press Preview.</p>\n' } };
+      '/Documents/readme.txt': { type: 'file', mtime: Date.now(), content: 'Welcome to HitBoy Web-OS!\n\n- Games has Doom, Wolfenstein 3D and Commander Keen.\n- Linux runs a real x86 Linux; this folder is shared at /mnt/home.\n- Drag files from your computer into Files to upload them.\n' },
+      '/Documents/hello.html': { type: 'file', mtime: Date.now(), content: '<!doctype html>\n<h1 style="font-family:sans-serif">Hello from HitBoy Web-OS</h1>\n<p>Edit me in Text Editor and press Preview.</p>\n' } };
   },
   async load() {
     let legacy = null;

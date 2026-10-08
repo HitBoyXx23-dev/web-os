@@ -2,19 +2,7 @@
 const frame = url => `<iframe src="${esc(url)}" allow="autoplay; fullscreen; gamepad; keyboard-map" allowfullscreen></iframe>`;
 const card = (icon, name, sub, attrs = '', extra = '') => `<div class="card" ${attrs}>${tile(icon, 40)}<div class="meta"><div class="name">${esc(name)}</div><div class="sub">${esc(sub)}</div></div>${extra}</div>`;
 
-// Operating systems the Virtual PC can boot, via the open-source v86 x86 emulator (copy.sh/v86).
-const VM_PROFILES = [
-  { id: 'windows98', name: 'Windows 98', img: 'windows95', mono: '98', bg: '#0f766e', note: 'Second Edition · 1998' },
-  { id: 'windows95', name: 'Windows 95', img: 'windows95', mono: '95', bg: '#0e7490', note: 'The first Start menu · 1995' },
-  { id: 'windowsme', name: 'Windows ME', mono: 'ME', bg: '#1d4ed8', note: 'Millennium Edition · 2000' },
-  { id: 'windows2000', name: 'Windows 2000', mono: '2K', bg: '#4338ca', note: 'NT 5.0 · slower to boot' },
-  { id: 'windows30', name: 'Windows 3.0', mono: '3.0', bg: '#475569', note: 'Program Manager · 1990' },
-  { id: 'windows1', name: 'Windows 1.01', mono: '1.0', bg: '#334155', note: 'The original · 1985' },
-  { id: 'reactos', name: 'ReactOS', mono: 'Ro', bg: '#2563eb', note: 'Open-source Windows clone' },
-  { id: 'freedos', name: 'FreeDOS', img: 'dosbox', mono: 'DOS', bg: '#27272a', note: 'Command line' },
-  { id: 'linux26', name: 'Linux', img: 'tux', mono: 'Lx', bg: '#ca8a04', note: 'Minimal 2.6 kernel' },
-  { id: 'kolibrios', name: 'KolibriOS', mono: 'K', bg: '#16a34a', note: 'Tiny assembly GUI OS' },
-];
+
 
 const CM = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/';
 // ext → [label, CodeMirror mode]
@@ -56,8 +44,6 @@ function FilePicker(win, { mode = 'open', start = '/', name = '' } = {}) {
   });
 }
 
-const vmIcon = p => p.img ? realIcon(p.img) : { mono: p.mono, bg: p.bg };
-
 const APPS = {
   games: { name: 'Games', icon: realIcon('applications-games'), cat: 'System', w: 760, h: 560, run(body) {
     const custom = JSON.parse(localStorage.getItem('novaos.customGames') || '[]');
@@ -85,18 +71,6 @@ const APPS = {
       else WM.open({ title: c.dataset.name, icon: c.dataset.img ? realIcon(c.dataset.img) : { mono: c.dataset.name.slice(0, 2), bg: '#52525b' }, w: 900, h: 640, content: frame(c.dataset.url) });
     };
     draw();
-  } },
-
-  vm: { name: 'Virtual PC', icon: realIcon('org.gnome.Boxes'), cat: 'System', w: 760, h: 540, run(body) {
-    body.innerHTML = `<div class="app-head"><h3>Virtual PC</h3><p>Boot a real operating system inside an emulated x86 PC, powered by the open-source v86 emulator. The first boot downloads the disk image and can take a minute.</p></div>
-      <div class="section-label">Choose a system</div>
-      <div class="cards" style="padding-bottom:20px">${VM_PROFILES.map(p => card(vmIcon(p), p.name, p.note, `data-id="${p.id}"`)).join('')}</div>`;
-    body.onclick = e => { const c = e.target.closest('.card'); if (c) this.boot(c.dataset.id); };
-  },
-  boot(id) {
-    const p = VM_PROFILES.find(v => v.id === id);
-    const w = WM.open({ title: p.name, icon: vmIcon(p), w: 1060, h: 820, content: frame('https://copy.sh/v86/?profile=' + p.id) });
-    WM.toggleMax(w, true);
   } },
 
   notepad: { name: 'Text Editor', icon: realIcon('org.gnome.TextEditor'), cat: 'Apps', w: 760, h: 520, run(body, win, path) {
@@ -150,7 +124,7 @@ const APPS = {
     const fmtSize = n => n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(1) + ' KB' : (n / 1048576).toFixed(1) + ' MB';
     const fileIcon = f => f.type === 'dir' ? glyph('folder', 18) : glyph({ image: 'paint', media: 'media', text: 'file', pdf: 'file' }[kindOf(f.path)] || 'file', 18);
     const draw = () => {
-      const items = FS.list(cwd), crumbs = cwd.split('/').filter(Boolean);
+      const items = FS.list(cwd).filter(f => !f.name.startsWith('.')), crumbs = cwd.split('/').filter(Boolean); // dot-folders (VM states) stay hidden
       body.innerHTML = `<div class="files-app"><nav>${places.map(([g, n, p]) => `<button data-go="${p}" class="${cwd === p ? 'on' : ''}">${glyph(g)}${n}</button>`).join('')}</nav>
         <div class="fill" style="flex:1;min-width:0"><div class="toolbar"><button class="icon-btn up" title="Up" ${cwd === '/' ? 'disabled' : ''}>${glyph('up')}</button>
           <span class="crumbs grow"><a data-go="/">Home</a>${crumbs.map((c, i) => ` / <a data-go="/${crumbs.slice(0, i + 1).join('/')}">${esc(c)}</a>`).join('')}</span>
@@ -210,7 +184,7 @@ const APPS = {
     body.innerHTML = '<div class="term"><div class="out"></div><span class="ps"></span><input spellcheck="false" autocomplete="off"></div>';
     const out = body.querySelector('.out'), inp = body.querySelector('input'), ps = body.querySelector('.ps'); let cwd = '/', hist = [], hi = 0;
     const print = s => { out.textContent += s + '\n'; body.firstChild.scrollTop = 1e9; };
-    const prompt_ = () => ps.textContent = `${OS.user}@nova ${cwd === '/' ? '~' : '~' + cwd} $ `;
+    const prompt_ = () => ps.textContent = `${OS.user}@hitboy ${cwd === '/' ? '~' : '~' + cwd} $ `;
     const cmds = {
       help: () => 'ls [dir]   cd <dir>   pwd   cat <file>   echo <text> [> file]\nmkdir <dir>   touch <file>   rm <path>   clear   date   whoami\nopen <app>   apps   neofetch   history',
       ls: a => FS.list(FS.join(cwd, a[0] || '.')).map(f => f.name + (f.type === 'dir' ? '/' : '')).join('   '),
@@ -221,7 +195,7 @@ const APPS = {
       rm: a => { FS.rm(FS.join(cwd, a[0])); }, clear: () => { out.textContent = ''; }, date: () => new Date().toString(), whoami: () => OS.user,
       history: () => hist.map((h, i) => `${String(i + 1).padStart(4)}  ${h}`).join('\n'),
       apps: () => Object.keys(ALL_APPS).join('   '), open: a => ALL_APPS[a[0]] ? (OS.launch(a[0]), '') : 'open: unknown app (see "apps")',
-      neofetch: () => `${OS.user}@nova\n${'-'.repeat(OS.user.length + 5)}\nOS       NovaOS 1.2\nShell    nsh\nBrowser  ${navigator.userAgent.match(/(Firefox|Edg|Chrome|Safari)\/[\d.]+/)?.[0] || 'unknown'}\nScreen   ${screen.width}x${screen.height}\nApps     ${Object.keys(ALL_APPS).length}\nWindows  ${WM.wins.size}`,
+      neofetch: () => `${OS.user}@hitboy\n${'-'.repeat(OS.user.length + 5)}\nOS       HitBoy Web-OS 3.0\nShell    nsh\nBrowser  ${navigator.userAgent.match(/(Firefox|Edg|Chrome|Safari)\/[\d.]+/)?.[0] || 'unknown'}\nScreen   ${screen.width}x${screen.height}\nApps     ${Object.keys(ALL_APPS).length}\nWindows  ${WM.wins.size}`,
     };
     inp.onkeydown = e => {
       if (e.key === 'ArrowUp') { e.preventDefault(); hi = Math.max(0, hi - 1); inp.value = hist[hi] ?? ''; return; }
@@ -233,7 +207,7 @@ const APPS = {
       const [c, ...a] = line.split(/\s+/);
       const r = cmds[c] ? cmds[c](a) : `nsh: command not found: ${c}`; if (r) print(r); prompt_();
     };
-    body.onclick = () => getSelection().isCollapsed && inp.focus(); print('NovaOS shell. Type "help" for commands.\n'); prompt_(); setTimeout(() => inp.focus());
+    body.onclick = () => getSelection().isCollapsed && inp.focus(); print('HitBoy Web-OS shell. Type "help" for commands.\n'); prompt_(); setTimeout(() => inp.focus());
   } },
 
   calc: { name: 'Calculator', icon: realIcon('accessories-calculator'), cat: 'Apps', w: 320, h: 460, run(body, win) {
@@ -354,7 +328,7 @@ const APPS = {
         <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>`;
       if (page === 'privacy') html = `<h3>Privacy</h3>
         ${row('Tab disguise', 'Changes the browser tab title and icon', `<select class="ck">${Object.keys(CLOAKS).map(k => `<option ${(c.cloak || 'None') === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`)}
-        ${row('Open in about:blank', 'Runs NovaOS inside a blank tab that stays out of your history', `<button class="blank">${glyph('external', 14)}Open</button>`)}
+        ${row('Open in about:blank', 'Runs HitBoy Web-OS inside a blank tab that stays out of your history', `<button class="blank">${glyph('external', 14)}Open</button>`)}
         <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="l"><span>Panic key</span><small>Press this key anywhere to jump straight to another site.</small></div>
         <div class="row"><input class="pk" style="width:110px" placeholder="Press a key" value="${esc(c.panicKey || '')}" readonly><input class="pu grow" placeholder="https://classroom.google.com" value="${esc(c.panicUrl || '')}"><button class="primary pb">Save</button></div></div>`;
       if (page === 'users') { const me = OS.account; html = `<h3>Users</h3>
@@ -364,7 +338,7 @@ const APPS = {
         <div class="small muted" style="margin-bottom:-8px">Other users</div>
         ${Users.list().filter(u => u.user !== me.user).map(u => row(`<span class="row">${avatar(u, 28)}${esc(u.name)}</span>`, '', `<button class="danger" data-rmuser="${esc(u.user)}">Remove</button>`)).join('') || '<div class="small muted">No other users. Add one from the login screen with “Not listed?”.</div>'}`; }
       if (page === 'system') html = `<h3>System</h3>
-        ${row('NovaOS', 'Version 1.3', `<button class="about">About</button>`)}
+        ${row('HitBoy Web-OS', 'Version 3.0', `<button class="about">About</button>`)}
         ${row('Boot menu', 'Show the GRUB menu and boot messages at startup', `<div class="seg">${['show', 'skip'].map(v => `<button data-fast="${v}" class="${!!c.fastBoot === (v === 'skip') ? 'on' : ''}">${v === 'show' ? 'Show' : 'Skip'}</button>`).join('')}</div>`)}
         ${row('Keyboard shortcuts', 'Ctrl+Space apps · Alt+` switch windows · Alt+W close · Alt+T terminal · Alt+L lock', '')}
         ${row('Storage', Object.keys(localStorage).filter(k => k.startsWith('novaos.')).reduce((n, k) => n + localStorage.getItem(k).length, 0).toLocaleString() + ' bytes used in this browser', '')}
@@ -392,7 +366,7 @@ const APPS = {
       if (b.classList.contains('blank')) OS.openBlank(location.href);
       if (b.classList.contains('pb')) { OS.set({ panicKey: body.querySelector('.pk').value, panicUrl: body.querySelector('.pu').value.trim() }); OS.toast('Panic key saved'); }
       if (b.classList.contains('about')) OS.launch('about');
-      if (b.classList.contains('rs') && confirm('Erase everything stored by NovaOS in this browser?')) { Object.keys(localStorage).filter(k => k.startsWith('novaos.')).forEach(k => localStorage.removeItem(k)); location.reload(); }
+      if (b.classList.contains('rs') && confirm('Erase everything stored by HitBoy Web-OS in this browser?')) { Object.keys(localStorage).filter(k => k.startsWith('novaos.')).forEach(k => localStorage.removeItem(k)); location.reload(); }
       draw();
     };
     body.onchange = e => { if (e.target.classList.contains('ck')) OS.set({ cloak: e.target.value }); };
@@ -401,8 +375,8 @@ const APPS = {
 
   about: { name: 'About', icon: 'about', cat: 'System', w: 400, h: 300, run(body) {
     body.innerHTML = `<div class="pad" style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding-top:32px">
-      <div style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML}</div><h3 style="font-size:18px">NovaOS</h3>
-      <p class="muted">Version 1.2</p><p class="muted small" style="max-width:300px">A desktop in your browser with games, a proxy browser, and a Virtual PC that boots real operating systems.</p></div>`;
+      <div style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML}</div><h3 style="font-size:18px">HitBoy Web-OS</h3>
+      <p class="muted">Version 3.0</p><p class="muted small" style="max-width:300px">A desktop in your browser with games, a proxy browser, Linux, and VMBox for running Ubuntu, Arch, Windows and more.</p></div>`;
   } },
 };
 
