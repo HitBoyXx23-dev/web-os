@@ -14,7 +14,7 @@ const uv = new UVServiceWorker();
 
 const CACHE = 'novaos-v22';
 const BASE = new URL('./', self.location).pathname;
-// Small core needed to boot offline; everything else is cached the first time it's used.
+// Small core needed to boot offline, including the HitBoy rewriter; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
   ...['icons', 'fs', 'wm', 'games', 'dos', 'browser', 'apps', 'vmbox', 'fatimg', 'runners', 'catalog', 'catalog-data', 'chat', 'ai', 'generate', 'code', 'friendslop', 'live', 'doodle', 'games2', 'games3d', 'linux', 'users', 'setup', 'shells', 'os', 'arrange'].map(f => `js/${f}.js`),
   'scram/scramjet.all.js', 'uv/uv.bundle.js', 'uv/uv.config.js', 'baremux/index.js', 'hitboy/engine.js'].map(p => BASE + p);
