@@ -7,7 +7,7 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v19';
+const CACHE = 'novaos-v21';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',

@@ -8,6 +8,20 @@ const LOCAL_MODELS = [
   ['Qwen2.5-1.5B-Instruct-q4f16_1-MLC', 'Qwen 2.5 1.5B', 'about 1.1 GB'],
   ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama 3.2 3B', 'about 2.3 GB · smarter'],
   ['Phi-3.5-mini-instruct-q4f16_1-MLC', 'Phi 3.5 mini', 'about 2.2 GB'],
+  ['Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC', 'Qwen Coder 0.5B', 'about 0.9 GB · code'],
+  ['Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC', 'Qwen Coder 1.5B', 'about 1.6 GB · code'],
+  ['gemma-2-2b-it-q4f16_1-MLC', 'Gemma 2 2B', 'about 1.9 GB'],
+  ['gemma3-1b-it-q4f16_1-MLC', 'Gemma 3 1B', 'about 1.0 GB'],
+  ['SmolLM2-1.7B-Instruct-q4f16_1-MLC', 'SmolLM2 1.7B', 'about 1.8 GB'],
+  ['Hermes-3-Llama-3.2-3B-q4f16_1-MLC', 'Hermes 3 3B', 'about 2.3 GB'],
+  ['DeepSeek-R1-Distill-Qwen-1.5B-q4f16_1-MLC', 'DeepSeek R1 1.5B', 'about 1.6 GB · reasons'],
+  ['Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC', 'Qwen Math 1.5B', 'about 1.6 GB · math'],
+];
+const SITE_MODELS = [
+  ['coder', 'Qwen Coder 3B', 'Code, on this site'],
+  ['llama', 'Llama 3.2 3B', 'Chat, on this site'],
+  ['mistral', 'Mistral Nemo 12B', 'Longer answers, on this site'],
+  ['qwen', 'Qwen 0.8B', 'Fast, on this site'],
 ];
 const MEDIA_MODELS = [
   ['photo', 'Photo', 'Natural light, sharp detail'],
@@ -17,8 +31,18 @@ const MEDIA_MODELS = [
   ['uncensored', 'Uncensored', 'Photo, safety filter off'],
   ['uncensored-anime', 'Uncensored anime', 'Anime, safety filter off'],
   ['moss', 'MOSS', 'MOSS-Image. Can take a few minutes'],
+  ['flat2d', 'Flat 2D', 'Flat cartoon. Uses an attached picture'],
+  ['nova', 'Nova Anime', 'Anime. Can use an attached picture'],
+  ['juggernaut', 'Juggernaut', 'Photo. Can use an attached picture'],
+  ['dreamshaper', 'Dreamshaper', 'Painted. Can use an attached picture'],
+  ['realistic', 'Realistic', 'Photo. Can use an attached picture'],
+  ['deliberate', 'Deliberate', 'Photo. Can use an attached picture'],
+  ['toon', 'Toon', 'Cartoon. Can use an attached picture'],
+  ['western', 'Western', 'TV cartoon. Can use an attached picture'],
+  ['ghibli', 'Ghibli', 'Soft paint. Can use an attached picture'],
+  ['counterfeit', 'Counterfeit', 'Anime. Can use an attached picture'],
 ];
-const AI_PROVIDERS = [['local', 'On this device'], ['claude', 'Claude'], ['image', 'Image'], ['video', 'Video']];
+const AI_PROVIDERS = [['local', 'On this device'], ['site', 'On this site'], ['claude', 'Claude'], ['image', 'Image'], ['video', 'Video']];
 const AI_SYSTEM = 'You are the assistant built into HitBoy Web-OS, a desktop that runs in a web browser. Be helpful, friendly and concise. Use Markdown for code.';
 
 // Minimal, safe Markdown: escape everything, then add code blocks, inline code, bold and line breaks.
@@ -38,7 +62,7 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
   const save = () => localStorage.setItem('novaos.aiChat', JSON.stringify(msgs.slice(-40)));
   const mediaUrls = [];
   const modelName = c => {
-    const list = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : LOCAL_MODELS;
+    const list = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : c.provider === 'site' ? SITE_MODELS : LOCAL_MODELS;
     return (list.find(m => m[0] === c.model) || list[0])[1];
   };
   const who = () => {
@@ -46,6 +70,7 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     $a('.ai-who').textContent = c.provider === 'claude' ? '· Claude Opus 5.5 (your API key)'
       : c.provider === 'image' ? '· Image · ' + modelName(c)
       : c.provider === 'video' ? '· Video · ' + modelName(c)
+      : c.provider === 'site' ? '· ' + modelName(c) + ' on this site'
       : '· ' + modelName(c) + ' on this device';
     ta.placeholder = c.provider === 'image' ? 'Describe a picture…' : c.provider === 'video' ? 'Describe a clip…' : 'Ask anything…';
   };
@@ -66,7 +91,7 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     const c = cfg();
     const ideas = c.provider === 'image' ? GEN_IMAGE_IDEAS : c.provider === 'video' ? GEN_VIDEO_IDEAS : ['Explain how a web proxy works', 'Write a Python script that renames files', 'Give me 5 co-op game ideas', 'Help me study for a biology test'];
     log.innerHTML = msgs.length ? msgs.map(m => `<div class="ai-msg ${m.role}">${m.role === 'user' ? esc(m.content).replace(/\n/g, '<br>') + shotsHtml(m) : aiMd(m.content) + mediaHtml(m)}</div>`).join('')
-      : `<div class="ai-empty">${tile({ mono: 'AI', bg: '#7c3aed' }, 56)}<h3>How can I help?</h3><p class="muted">Chat on this device, or switch to Claude, Image, or Video in <b>Model</b>. Attach a picture with the button below. Pictures save to Pictures and clips save to Videos.</p>
+      : `<div class="ai-empty">${tile({ mono: 'AI', bg: '#7c3aed' }, 56)}<h3>How can I help?</h3><p class="muted">Chat on this device or on this site, or switch to Claude, Image, or Video in <b>Model</b>. Attach a picture with the button below. Pictures save to Pictures and clips save to Videos.</p>
         <div class="ai-ideas">${ideas.map(t => `<button data-idea="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`;
     log.scrollTop = 1e9;
   };
@@ -97,10 +122,10 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
   };
   const settings = () => {
     const c = cfg(), box = $a('.ai-settings');
-    const models = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : c.provider === 'local' ? LOCAL_MODELS : null;
+    const models = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : c.provider === 'site' ? SITE_MODELS : c.provider === 'local' ? LOCAL_MODELS : null;
     box.innerHTML = `<div class="seg">${AI_PROVIDERS.map(([k, n]) => `<button data-prov="${k}" class="${c.provider === k ? 'on' : ''}">${n}</button>`).join('')}</div>
       ${models ? `<div class="ai-models">${models.map(([id, n, d]) => `<label><input type="radio" name="aim" value="${id}" ${c.model === id ? 'checked' : ''}><b>${n}</b><small>${d}</small></label>`).join('')}</div>
-        <p class="small muted">${c.provider === 'local' ? 'Downloaded once, then cached. Needs a browser with WebGPU (Chrome, Edge, recent Safari/Firefox) and a few GB of free memory. This model cannot see attached pictures.' : 'Made on this site from the description you type. The result is saved in Files. MOSS can take a few minutes.'}</p>`
+        <p class="small muted">${c.provider === 'local' ? 'Downloaded once, then cached. Needs a browser with WebGPU (Chrome, Edge, recent Safari/Firefox) and a few GB of free memory. This model cannot see attached pictures.' : c.provider === 'site' ? 'Runs on this site. Nothing to download. A reply can take a minute.' : 'Made on this site from the description you type. The result is saved in Files. Flat 2D and the other Horde looks can use an attached picture. MOSS follows the words. These can take a few minutes. A video clip is a short move of that picture.'}</p>`
       : `<label class="field">Anthropic API key<input type="password" class="ai-key" placeholder="sk-ant-…" value="${esc(c.key)}" autocomplete="off"></label>
         <p class="small muted">Uses Claude Opus 5.5. Get a key at console.anthropic.com. The key is stored only in this browser — don't save it on a shared computer. Usage is billed to your Anthropic account. Attached pictures are sent with the message so Claude can see them.</p>`}`;
   };
@@ -147,18 +172,32 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     if (!images.length) return m.content || '';
     return [...images, { type: 'text', text: m.content || 'What is in this picture?' }];
   };
+  const runSite = async (out, render) => {
+    const ctl = new AbortController(); abort = () => ctl.abort();
+    out.content = 'Writing…'; render();
+    const style = SITE_MODELS.some(m => m[0] === cfg().model) ? cfg().model : SITE_MODELS[0][0];
+    const turns = msgs.slice(0, -1).slice(-8).map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content || (m.images?.length ? '(a picture was attached)' : '')}`);
+    out.content = await fetchText(turns.join('\n') + '\nAssistant:', style, ctl.signal);
+  };
   const runMedia = async (out, render) => {
     const c = cfg(), video = c.provider === 'video';
     if (video && typeof MediaRecorder === 'undefined') throw new Error('This browser cannot record a clip.');
     const style = MEDIA_MODELS.some(m => m[0] === c.model) ? c.model : 'photo';
     const size = video ? GEN_SIZES.wide : GEN_SIZES.square;
     const ctl = new AbortController(); abort = () => ctl.abort();
-    out.content = style === 'moss' ? 'MOSS is drawing. This can take a few minutes.' : video ? 'Making the clip…' : 'Making the picture…'; render();
+    const horde = !!HORDE_IMAGE[style];
+    out.content = horde ? 'Drawing. This can take a few minutes.' : video ? 'Making the clip…' : 'Making the picture…'; render();
     const ask = (msgs.at(-2).content || '').trim() || 'A picture';
-    const seed = Math.floor(Math.random() * 1e9);
-    const picture = style === 'moss'
-      ? await fetchMoss(ask, size, ctl.signal)
-      : await fetchPicture(genSrc(ask, { style, width: size[0], height: size[1], seed }), ctl.signal);
+    let picture;
+    if (horde) {
+      const shot = msgs.at(-2)?.images?.[0];
+      const bytes = shot ? FS.bytes(shot) : null;
+      const attachedBlob = bytes ? new Blob([bytes], { type: 'image/jpeg' }) : null;
+      picture = await fetchHorde(ask, style, size, attachedBlob, ctl.signal);
+    } else {
+      const seed = Math.floor(Math.random() * 1e9);
+      picture = await fetchPicture(genSrc(ask, { style, width: size[0], height: size[1], seed }), ctl.signal);
+    }
     let blob = picture.blob;
     try {
       if (video) { out.content = 'Recording the clip…'; render(); blob = await recordClip([picture.frame], ctl.signal); }
@@ -182,11 +221,12 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     const render = () => { el().innerHTML = aiMd(out.content || '…'); log.scrollTop = 1e9; };
     try {
       const provider = cfg().provider;
-      await (provider === 'claude' ? runClaude : provider === 'image' || provider === 'video' ? runMedia : runLocal)(out, render);
+      await (provider === 'claude' ? runClaude : provider === 'site' ? runSite : provider === 'image' || provider === 'video' ? runMedia : runLocal)(out, render);
     } catch (e) {
       const m = e?.status === 401 ? 'That API key was rejected. Check it in Model.' : e?.status === 429 ? 'Rate limited — wait a moment and try again.' : e?.name === 'AbortError' || /abort/i.test(e?.message) ? '' : (e?.message || String(e));
-      if (!m && /^(Making the picture…|Making the clip…|Recording the clip…|MOSS is drawing\. This can take a few minutes\.|…)$/.test(out.content)) out.content = '';
-      if (m) out.content = (out.content && out.content !== '…' && !out.content.startsWith('Making ') && out.content !== 'Recording the clip…' ? out.content + '\n\n' : '') + '⚠️ ' + m;
+      const statusLine = /^(Making the picture…|Making the clip…|Recording the clip…|Drawing\. This can take a few minutes\.|Writing…|…)$/;
+      if (!m && statusLine.test(out.content)) out.content = '';
+      if (m) out.content = (out.content && !statusLine.test(out.content) && !out.content.startsWith('Making ') ? out.content + '\n\n' : '') + '⚠️ ' + m;
     }
     if (!out.content || out.content === '…') msgs.pop();
     abort = null; setBusy(false); draw(); save();
@@ -201,7 +241,7 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     if (a === 'send' && busy) { e.preventDefault(); abort?.(); }
     const p = e.target.closest('[data-prov]'); if (p) {
       localStorage.setItem('novaos.aiProvider', p.dataset.prov);
-      const list = p.dataset.prov === 'image' || p.dataset.prov === 'video' ? MEDIA_MODELS : p.dataset.prov === 'local' ? LOCAL_MODELS : null;
+      const list = p.dataset.prov === 'image' || p.dataset.prov === 'video' ? MEDIA_MODELS : p.dataset.prov === 'site' ? SITE_MODELS : p.dataset.prov === 'local' ? LOCAL_MODELS : null;
       if (list && !list.some(m => m[0] === localStorage.getItem('novaos.aiModel'))) localStorage.setItem('novaos.aiModel', list[0][0]);
       settings(); who(); if (!msgs.length) draw();
     }

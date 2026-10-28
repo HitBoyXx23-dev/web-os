@@ -4,7 +4,7 @@ import express from 'express';
 import { server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { handleParty, listRooms } from './party.js';
 import { sendImage } from './lib/generate.js';
-import { readJson, sendMoss } from './lib/moss.js';
+import { isHorde, readJson, sendMoss } from './lib/moss.js';
 import { sendYouTube } from './lib/youtube.js';
 
 const app = express();
@@ -26,7 +26,7 @@ app.get('/api/wisp', (req, res) => res.json({ ok: true }));
 const generate = async (req, res) => {
   if (req.method === 'POST') req.body = await readJson(req);
   const style = String((req.body && req.body.style) || req.query.style || '');
-  if (style === 'moss') return sendMoss(req, res);
+  if (isHorde(style)) return sendMoss(req, res);
   return sendImage(req, res);
 };
 app.get('/api/generate', generate);
