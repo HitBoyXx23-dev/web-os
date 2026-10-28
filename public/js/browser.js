@@ -176,6 +176,7 @@ function BrowserApp(body, win, opts = {}) {
     }
     t.el.innerHTML = ''; const f = document.createElement('iframe');
     f.setAttribute('allow', 'autoplay; fullscreen; clipboard-write; gamepad; encrypted-media');
+    f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock allow-downloads allow-presentation');
     f.setAttribute('allowfullscreen', ''); f.src = src; t.el.appendChild(f); t.frame = f;
     f.onload = () => {
       loading(false);

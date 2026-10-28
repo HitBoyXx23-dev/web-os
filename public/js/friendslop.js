@@ -403,7 +403,11 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   const connect = (code, pub) => {
     solo = false; peers.clear();
     conn = Party.connect('game', 'ss-' + code.toLowerCase(), me.name, {
-      welcome: m => { myId = m.id; conn.pub = pub; m.peers.forEach(p => peers.set(p.id, { id: p.id, name: p.name })); pickHost(); room(code); announce('waiting'); send({ t: 'p', x: 0, y: 0, a: 0, fl: true, dead: false, e: 0, c: me.color, n: me.name }); },
+      welcome: (m, info) => {
+        myId = m.id; conn.pub = pub; peers.clear(); m.peers.forEach(p => peers.set(p.id, { id: p.id, name: p.name })); pickHost();
+        if (!info?.again) room(code); else drawRoom();
+        announce(W ? 'playing' : 'waiting'); send({ t: 'p', x: 0, y: 0, a: 0, fl: true, dead: false, e: 0, c: me.color, n: me.name });
+      },
       join: p => { peers.set(p.id, { id: p.id, name: p.name }); pickHost(); drawRoom(); say(`${p.name} joined`); },
       leave: id => { const p = peers.get(id); peers.delete(id); pickHost(); drawRoom(); if (p) say(`${p.name} left`); announce(W ? 'playing' : 'waiting'); },
       message: m => { if (m.t === 'w' && ui.querySelector('.ss-lobby')) begin(); onMsg(m); drawRoom(); },

@@ -9,6 +9,13 @@ const LOCAL_MODELS = [
   ['Llama-3.2-3B-Instruct-q4f16_1-MLC', 'Llama 3.2 3B', 'about 2.3 GB · smarter'],
   ['Phi-3.5-mini-instruct-q4f16_1-MLC', 'Phi 3.5 mini', 'about 2.2 GB'],
 ];
+const MEDIA_MODELS = [
+  ['photo', 'Photo', 'Natural light, sharp detail'],
+  ['illustration', 'Illustration', 'Clean shapes, soft color'],
+  ['poster', 'Poster', 'Bold graphic composition'],
+  ['pixel', 'Pixel', 'Crisp pixel art'],
+];
+const AI_PROVIDERS = [['local', 'On this device'], ['claude', 'Claude'], ['image', 'Image'], ['video', 'Video']];
 const AI_SYSTEM = 'You are the assistant built into HitBoy Web-OS, a desktop that runs in a web browser. Be helpful, friendly and concise. Use Markdown for code.';
 
 // Minimal, safe Markdown: escape everything, then add code blocks, inline code, bold and line breaks.
@@ -24,18 +31,40 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     <form class="ai-send"><textarea rows="1" placeholder="Ask anything…"></textarea><button class="primary" data-a="send">Send</button></form></div>`;
   const $a = s => body.querySelector(s), log = $a('.ai-log'), ta = $a('textarea');
   const save = () => localStorage.setItem('novaos.aiChat', JSON.stringify(msgs.slice(-40)));
-  const who = () => { const c = cfg(); $a('.ai-who').textContent = c.provider === 'claude' ? '· Claude Opus 5.5 (your API key)' : '· ' + (LOCAL_MODELS.find(m => m[0] === c.model) || LOCAL_MODELS[0])[1] + ' on this device'; };
+  const mediaUrls = [];
+  const modelName = c => {
+    const list = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : LOCAL_MODELS;
+    return (list.find(m => m[0] === c.model) || list[0])[1];
+  };
+  const who = () => {
+    const c = cfg();
+    $a('.ai-who').textContent = c.provider === 'claude' ? '· Claude Opus 5.5 (your API key)'
+      : c.provider === 'image' ? '· Image · ' + modelName(c)
+      : c.provider === 'video' ? '· Video · ' + modelName(c)
+      : '· ' + modelName(c) + ' on this device';
+    ta.placeholder = c.provider === 'image' ? 'Describe a picture…' : c.provider === 'video' ? 'Describe a clip…' : 'Ask anything…';
+  };
+  const mediaHtml = m => {
+    if (!m.media || !FS.exists(m.media.path)) return '';
+    const blob = FS.blob(m.media.path); if (!blob) return '';
+    const url = URL.createObjectURL(blob); mediaUrls.push(url);
+    return m.media.kind === 'video' ? `<video class="ai-media" src="${url}" controls></video>` : `<img class="ai-media" alt="" src="${url}">`;
+  };
   const draw = () => {
-    log.innerHTML = msgs.length ? msgs.map(m => `<div class="ai-msg ${m.role}">${m.role === 'user' ? esc(m.content).replace(/\n/g, '<br>') : aiMd(m.content)}</div>`).join('')
-      : `<div class="ai-empty">${tile({ mono: 'AI', bg: '#7c3aed' }, 56)}<h3>How can I help?</h3><p class="muted">Runs on this device by default — nothing you type leaves your computer. Switch to Claude in <b>Model</b>.</p>
-        <div class="ai-ideas">${['Explain how a web proxy works', 'Write a Python script that renames files', 'Give me 5 co-op game ideas', 'Help me study for a biology test'].map(t => `<button data-idea="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`;
+    mediaUrls.splice(0).forEach(u => URL.revokeObjectURL(u));
+    const c = cfg();
+    const ideas = c.provider === 'image' ? GEN_IMAGE_IDEAS : c.provider === 'video' ? GEN_VIDEO_IDEAS : ['Explain how a web proxy works', 'Write a Python script that renames files', 'Give me 5 co-op game ideas', 'Help me study for a biology test'];
+    log.innerHTML = msgs.length ? msgs.map(m => `<div class="ai-msg ${m.role}">${m.role === 'user' ? esc(m.content).replace(/\n/g, '<br>') : aiMd(m.content)}${m.role === 'assistant' ? mediaHtml(m) : ''}</div>`).join('')
+      : `<div class="ai-empty">${tile({ mono: 'AI', bg: '#7c3aed' }, 56)}<h3>How can I help?</h3><p class="muted">Chat on this device, or switch to Claude, Image, or Video in <b>Model</b>. Pictures save to Pictures and clips save to Videos.</p>
+        <div class="ai-ideas">${ideas.map(t => `<button data-idea="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`;
     log.scrollTop = 1e9;
   };
   const settings = () => {
     const c = cfg(), box = $a('.ai-settings');
-    box.innerHTML = `<div class="seg">${[['local', 'On this device'], ['claude', 'Claude (API key)']].map(([k, n]) => `<button data-prov="${k}" class="${c.provider === k ? 'on' : ''}">${n}</button>`).join('')}</div>
-      ${c.provider === 'local' ? `<div class="ai-models">${LOCAL_MODELS.map(([id, n, d]) => `<label><input type="radio" name="aim" value="${id}" ${c.model === id ? 'checked' : ''}><b>${n}</b><small>${d}</small></label>`).join('')}</div>
-        <p class="small muted">Downloaded once, then cached. Needs a browser with WebGPU (Chrome, Edge, recent Safari/Firefox) and a few GB of free memory.</p>`
+    const models = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : c.provider === 'local' ? LOCAL_MODELS : null;
+    box.innerHTML = `<div class="seg">${AI_PROVIDERS.map(([k, n]) => `<button data-prov="${k}" class="${c.provider === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+      ${models ? `<div class="ai-models">${models.map(([id, n, d]) => `<label><input type="radio" name="aim" value="${id}" ${c.model === id ? 'checked' : ''}><b>${n}</b><small>${d}</small></label>`).join('')}</div>
+        <p class="small muted">${c.provider === 'local' ? 'Downloaded once, then cached. Needs a browser with WebGPU (Chrome, Edge, recent Safari/Firefox) and a few GB of free memory.' : 'Made on this site. Nothing to configure. The result is saved in Files.'}</p>`
       : `<label class="field">Anthropic API key<input type="password" class="ai-key" placeholder="sk-ant-…" value="${esc(c.key)}" autocomplete="off"></label>
         <p class="small muted">Uses Claude Opus 5.5. Get a key at console.anthropic.com. The key is stored only in this browser — don't save it on a shared computer. Usage is billed to your Anthropic account.</p>`}`;
   };
@@ -70,15 +99,36 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     const final = await stream.finalMessage();
     if (final.stop_reason === 'refusal') out.content += (out.content ? '\n\n' : '') + "_Claude declined to answer this one._";
   };
+  const runMedia = async (out, render) => {
+    const c = cfg(), video = c.provider === 'video';
+    if (video && typeof MediaRecorder === 'undefined') throw new Error('This browser cannot record a clip.');
+    const style = MEDIA_MODELS.some(m => m[0] === c.model) ? c.model : 'photo';
+    const size = video ? GEN_SIZES.wide : GEN_SIZES.square;
+    const ctl = new AbortController(); abort = () => ctl.abort();
+    out.content = video ? 'Making the clip…' : 'Making the picture…'; render();
+    const picture = await fetchPicture(genSrc(msgs.at(-2).content, { style, width: size[0], height: size[1], seed: Math.floor(Math.random() * 1e9) }), ctl.signal);
+    let blob = picture.blob;
+    try {
+      if (video) { out.content = 'Recording the clip…'; render(); blob = await recordClip([picture.frame], ctl.signal); }
+    } finally { picture.frame.close(); }
+    const base = (msgs.at(-2).content.replace(/[^\w .-]+/g, '').trim().slice(0, 40) || (video ? 'clip' : 'picture')) + (video ? '.webm' : '.jpg');
+    const path = FS.freeName(video ? '/Videos' : '/Pictures', base);
+    FS.writeBytes(path, new Uint8Array(await blob.arrayBuffer()), blob.type || (video ? 'video/webm' : 'image/jpeg'));
+    out.media = { kind: video ? 'video' : 'image', path };
+    out.content = 'Saved to ' + path;
+  };
   const send = async text => {
     text = text.trim(); if (!text || busy) return;
     push('user', text); const out = push('assistant', '…'); setBusy(true);
     const el = () => log.lastElementChild;
     const render = () => { el().innerHTML = aiMd(out.content || '…'); log.scrollTop = 1e9; };
-    try { await (cfg().provider === 'claude' ? runClaude : runLocal)(out, render); }
-    catch (e) {
+    try {
+      const provider = cfg().provider;
+      await (provider === 'claude' ? runClaude : provider === 'image' || provider === 'video' ? runMedia : runLocal)(out, render);
+    } catch (e) {
       const m = e?.status === 401 ? 'That API key was rejected. Check it in Model.' : e?.status === 429 ? 'Rate limited — wait a moment and try again.' : e?.name === 'AbortError' || /abort/i.test(e?.message) ? '' : (e?.message || String(e));
-      if (m) out.content = (out.content && out.content !== '…' ? out.content + '\n\n' : '') + '⚠️ ' + m;
+      if (!m && /^(Making the picture…|Making the clip…|Recording the clip…|…)$/.test(out.content)) out.content = '';
+      if (m) out.content = (out.content && out.content !== '…' && !out.content.startsWith('Making ') && out.content !== 'Recording the clip…' ? out.content + '\n\n' : '') + '⚠️ ' + m;
     }
     if (!out.content || out.content === '…') msgs.pop();
     abort = null; setBusy(false); draw(); save();
@@ -89,7 +139,12 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     if (a === 'new') { abort?.(); msgs = []; save(); draw(); }
     if (a === 'settings') { $a('.ai-settings').classList.toggle('hidden'); settings(); }
     if (a === 'send' && busy) { e.preventDefault(); abort?.(); }
-    const p = e.target.closest('[data-prov]'); if (p) { localStorage.setItem('novaos.aiProvider', p.dataset.prov); settings(); who(); }
+    const p = e.target.closest('[data-prov]'); if (p) {
+      localStorage.setItem('novaos.aiProvider', p.dataset.prov);
+      const list = p.dataset.prov === 'image' || p.dataset.prov === 'video' ? MEDIA_MODELS : p.dataset.prov === 'local' ? LOCAL_MODELS : null;
+      if (list && !list.some(m => m[0] === localStorage.getItem('novaos.aiModel'))) localStorage.setItem('novaos.aiModel', list[0][0]);
+      settings(); who(); if (!msgs.length) draw();
+    }
     const i = e.target.closest('[data-idea]'); if (i) send(i.dataset.idea);
   };
   body.onchange = e => {

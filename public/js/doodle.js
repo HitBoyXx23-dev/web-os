@@ -139,7 +139,12 @@ GAME_APPS.doodle = ALL_APPS.doodle = { name: 'Doodle Duel', icon: { mono: 'DD', 
   const join = (room, pub) => {
     me.name = ($d('.dd-name')?.value.trim() || me.name).slice(0, 16); code = room.replace(/^dd-/, '');
     conn = Party.connect('game', room, me.name, {
-      welcome: m => { myId = m.id; owner = m.owner; m.peers.forEach(p => peers.set(p.id, p)); if (isHost()) { H = { public: pub }; newGame(); } render(); },
+      welcome: (m, info) => {
+        myId = m.id; owner = m.owner; peers.clear(); m.peers.forEach(p => peers.set(p.id, p));
+        if (info?.again) { if (isHost() && H) publish(); return render(); }
+        if (isHost()) { H = { public: pub }; newGame(); }
+        render();
+      },
       join: p => { peers.set(p.id, p); sys(`${p.name} joined`); if (isHost()) { publish(); if (strokes.length) toOne(p.id, { t: 'strokes', list: strokes }); } },
       leave: id => { const n = nameOf(id); peers.delete(id); sys(`${n} left`); if (isHost() && H) { if (H.drawer === id && H.phase === 'pick') nextTurn(); else if (H.drawer === id && H.phase === 'draw') endTurn(); publish(); } },
       message: m => {

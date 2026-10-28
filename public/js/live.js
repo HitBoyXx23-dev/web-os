@@ -73,7 +73,12 @@ APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e
     stream.getVideoTracks()[0].onended = () => end();
     const up = setInterval(() => { const u = $l('.live-up'); if (!u) return clearInterval(up); u.textContent = 'live for ' + liveSince(meta?.started || Date.now()); }, 15000);
     conn = Party.connect('live', room, me, {
-      welcome: m => { conn.room = room; m.peers.forEach(p => peers.set(p.id, p)); conn.send({ t: 'meta', meta: { title, kind: 'stream', name: me, public: pub } }); line({ sys: 'You are live! Viewers can chat here.' }); viewers(); },
+      welcome: (m, info) => {
+        conn.room = room; peers.clear(); m.peers.forEach(p => peers.set(p.id, p));
+        conn.send({ t: 'meta', meta: { title, kind: 'stream', name: me, public: pub } });
+        line({ sys: info?.again ? 'Reconnected.' : 'You are live! Viewers can chat here.' });
+        viewers();
+      },
       join: p => { peers.set(p.id, p); viewers(); },
       leave: id => { peers.delete(id); pcs.get(id)?.close(); pcs.delete(id); viewers(); },
       message: async m => {
@@ -103,9 +108,9 @@ APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e
     const ended = () => { wait('This stream has ended.'); pcs.forEach(pc => pc.close()); pcs.clear(); };
     const showMeta = () => { if (!meta) return; $l('.live-title').textContent = meta.title || 'Live'; $l('.live-who').textContent = meta.name; WM.setTitle(win, `${meta.name} — HitBoy Live`); };
     conn = Party.connect('live', room, me, {
-      welcome: m => {
-        m.peers.forEach(p => peers.set(p.id, p)); peers.set(m.id, { id: m.id, name: me }); owner = m.owner; meta = m.meta; viewers();
-        m.history.forEach(line);
+      welcome: (m, info) => {
+        peers.clear(); m.peers.forEach(p => peers.set(p.id, p)); peers.set(m.id, { id: m.id, name: me }); owner = m.owner; meta = m.meta; viewers();
+        if (!info?.again) m.history.forEach(line);
         if (!meta || owner === m.id) return ended();
         showMeta(); conn.send({ t: 'watch', to: owner });
       },

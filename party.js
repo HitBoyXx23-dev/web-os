@@ -18,11 +18,27 @@ const rooms = new Map(); // "app:room" -> { clients: Map(id -> ws), history: [] 
 let nextId = 1;
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
+function requestTarget(req) {
+  const raw = String(req.url || '/');
+  const forwarded = String(req.headers['x-forwarded-uri'] || req.headers['x-vercel-sc-url'] || '');
+  let chosen = raw.includes('?') || raw.includes('/party/') ? raw : (forwarded.includes('party') ? forwarded : raw);
+  const extra = req.headers['x-invoke-query'];
+  if (extra && !chosen.includes('?')) chosen += '?' + extra;
+  return new URL(chosen, 'http://x');
+}
+
 export function handleParty(req, socket, head) {
-  const raw = req.url && String(req.url).includes('?') ? req.url : (req.headers['x-forwarded-uri'] || req.headers['x-vercel-sc-url'] || req.url || '/');
-  const u = new URL(raw, 'http://x'), app = u.searchParams.get('app');
+  const u = requestTarget(req);
+  const parts = u.pathname.split('/').filter(Boolean);
+  const at = parts.lastIndexOf('party');
+  const path = at >= 0 ? parts.slice(at + 1) : [];
+  let room = u.searchParams.get('room') || '';
+  let name = u.searchParams.get('name') || '';
+  try { if (!room && path[1]) room = decodeURIComponent(path[1]); } catch (e) {}
+  try { if (!name && path[2]) name = decodeURIComponent(path[2]); } catch (e) {}
+  const app = u.searchParams.get('app') || path[0];
   if (!LIMITS[app]) return socket.destroy();
-  wss.handleUpgrade(req, socket, head, ws => join(ws, app, clean(u.searchParams.get('room'), 32).toLowerCase() || 'lobby', clean(u.searchParams.get('name'), 24) || 'Guest'));
+  wss.handleUpgrade(req, socket, head, ws => join(ws, app, clean(room, 32).toLowerCase() || 'lobby', clean(name, 24) || 'Guest'));
 }
 
 function join(ws, app, roomName, name) {

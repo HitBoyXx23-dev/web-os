@@ -3,25 +3,42 @@
 const Party = {
   url(app, room, name) {
     const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    return `${proto}${location.host}${BASE}api/party?app=${app}&room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
+    const bit = s => encodeURIComponent(String(s || '').replace(/\//g, '')).replace(/%2F/gi, '');
+    return `${proto}${location.host}${BASE}api/party/${bit(app)}/${bit(room)}/${bit(name)}`;
   },
   async rooms(app) {
     try { const r = await fetch(`${location.origin}${BASE}api/party?list=1&app=${encodeURIComponent(app)}`, { cache: 'no-store' }); return r.ok ? await r.json() : []; } catch (e) { return null; }
   },
   // Opens a room. on: { welcome, join, leave, message(m), close(reason) }
   connect(app, room, name, on) {
-    const ws = new WebSocket(this.url(app, room, name)); let opened = false;
-    const conn = { id: null, ws, send: m => ws.readyState === 1 && ws.send(JSON.stringify(m)), close: () => { conn.closed = true; ws.close(); } };
-    ws.onopen = () => { opened = true; };
-    ws.onmessage = e => {
-      let m; try { m = JSON.parse(e.data); } catch (err) { return; }
-      if (m.t === 'welcome') { conn.id = m.id; on.welcome?.(m); }
-      else if (m.t === 'join') on.join?.(m.peer);
-      else if (m.t === 'leave') on.leave?.(m.id);
-      else if (m.t === 'full') on.close?.('That room is full.');
-      else on.message?.(m);
+    let ws, opened = false, tries = 0, delay = 800, timer;
+    const conn = {
+      id: null,
+      get ws() { return ws; },
+      send: m => ws && ws.readyState === 1 && ws.send(JSON.stringify(m)),
+      close() { conn.closed = true; clearTimeout(timer); try { ws?.close(); } catch (e) {} },
     };
-    ws.onclose = () => { if (!conn.closed) on.close?.(opened ? 'Disconnected from the server.' : NO_PARTY); };
+    const open = () => {
+      if (conn.closed) return;
+      ws = new WebSocket(this.url(app, room, name));
+      ws.onopen = () => { opened = true; tries = 0; delay = 800; };
+      ws.onmessage = e => {
+        let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+        if (m.t === 'welcome') { const again = !!conn._seen; conn.id = m.id; conn._seen = true; on.welcome?.(m, { again }); }
+        else if (m.t === 'join') on.join?.(m.peer);
+        else if (m.t === 'leave') on.leave?.(m.id);
+        else if (m.t === 'full') { conn.closed = true; on.close?.('That room is full.'); }
+        else on.message?.(m);
+      };
+      ws.onclose = () => {
+        if (conn.closed) return;
+        if (!opened && ++tries >= 4) return on.close?.(NO_PARTY);
+        on.status?.('Reconnecting…');
+        timer = setTimeout(open, delay);
+        delay = Math.min(delay * 2, 15000);
+      };
+    };
+    open();
     return conn;
   },
 };
@@ -65,7 +82,14 @@ APPS.chat = ALL_APPS.chat = { name: 'Live Chat', icon: realIcon('discord'), cat:
     stopLive(); conn?.close(); peers.clear(); live.clear(); log.innerHTML = ''; drawRooms(); status('Connecting…');
     localStorage.setItem('novaos.chatRoom', room);
     conn = Party.connect('chat', room, me, {
-      welcome: m => { status('Online'); m.peers.forEach(p => peers.set(p.id, p)); m.history.forEach(line); line({ sys: `You joined #${room}. Be kind — messages are visible to everyone in this room.` }); drawPeople(); },
+      welcome: (m, info) => {
+        status('Online'); peers.clear(); m.peers.forEach(p => peers.set(p.id, p));
+        if (info?.again) line({ sys: 'Reconnected.' });
+        else { m.history.forEach(line); line({ sys: `You joined #${room}. Be kind — messages are visible to everyone in this room.` }); }
+        if (myStream) conn.send({ t: 'live', on: true });
+        drawPeople();
+      },
+      status,
       join: p => { peers.set(p.id, p); line({ sys: `${p.name} joined` }); drawPeople(); if (myStream) conn.send({ t: 'live', on: true, to: p.id }); },
       leave: id => { const p = peers.get(id); peers.delete(id); live.delete(id); closePC(inPCs, id); closePC(outPCs, id); removeTile(id); if (p) line({ sys: `${p.name} left` }); drawPeople(); },
       message: m => {

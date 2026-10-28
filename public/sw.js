@@ -7,7 +7,7 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v15';
+const CACHE = 'novaos-v17';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
@@ -38,7 +38,9 @@ function isolate(req, res) {
 async function shell(req) {
   try {
     const res = await fetch(req);
-    if (res.ok && res.status === 200 && !req.headers.has('range')) {
+    const type = res.headers.get('content-type') || '';
+    const heavy = +(res.headers.get('content-length') || 0) > 2 * 1024 * 1024 || /^(video|audio)\//.test(type);
+    if (res.ok && res.status === 200 && !req.headers.has('range') && !heavy) {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
     }
@@ -75,22 +77,49 @@ function proxiedTarget(url) {
   return null;
 }
 
+const PROXY_PREFIXES = [BASE + 'scramjet/', BASE + 'uv/'];
+const proxyPath = path => PROXY_PREFIXES.some(p => path.startsWith(p));
+// Proxied pages are same-origin with the desktop, so a framed site can reach the real top window.
+// Hide that window: top stays inside the proxy, and parent does too when the parent is the desktop.
+const FRAME_GUARD = `<script>(function(){try{var w=window,marks=${JSON.stringify([BASE + 'scramjet/', BASE + 'uv/'])};function proxied(win){try{var p=String(win.location.pathname);for(var i=0;i<marks.length;i++)if(p.indexOf(marks[i])===0)return true;}catch(e){}return false;}if(!proxied(w))return;var topProxy=w;try{var p=w;while(p.parent&&p.parent!==p&&proxied(p.parent))p=p.parent;topProxy=p;}catch(e){}try{Object.defineProperty(w,"top",{configurable:true,get:function(){return topProxy;}});}catch(e){}try{if(w.parent&&!proxied(w.parent))Object.defineProperty(w,"parent",{configurable:true,get:function(){return w;}});}catch(e){}}catch(e){}})();</script>`;
+
+async function shield(event, res) {
+  const dest = event.request.destination;
+  const type = res.headers.get('content-type') || '';
+  if ((dest !== 'document' && dest !== 'iframe') || !type.includes('text/html') || !res.body) return res;
+  const headers = new Headers(res.headers);
+  headers.delete('content-length');
+  headers.delete('x-frame-options');
+  if (+(res.headers.get('content-length') || 0) > 8 * 1024 * 1024) return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+  let html; try { html = await res.text(); } catch (e) { return new Response('There was an error loading this page.', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' } }); }
+  const out = /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, m => m + FRAME_GUARD) : FRAME_GUARD + html;
+  return new Response(out, { status: res.status, statusText: res.statusText, headers });
+}
+
 self.addEventListener('fetch', event => {
   // Requests to other sites (APIs, CDNs) go straight to the network; proxy routes are always on this origin.
-  if (new URL(event.request.url).origin !== location.origin) return;
+  let url; try { url = new URL(event.request.url); } catch (e) { return; }
+  if (url.origin !== location.origin) return;
   event.respondWith((async () => {
-    await settingsReady;
-    if (adblock && event.request.destination !== 'document') {
-      const target = proxiedTarget(new URL(event.request.url));
-      if (target && blockedHost(target.hostname)) return new Response(null, { status: 204 });
+    try {
+      await settingsReady;
+      if (adblock && event.request.destination !== 'document') {
+        const target = proxiedTarget(url);
+        let referrer = null; try { referrer = proxiedTarget(new URL(event.request.referrer)); } catch (e) {}
+        const videoSite = referrer && /(^|\.)(youtube\.com|youtu\.be|googlevideo\.com|ytimg\.com|twitch\.tv|spotify\.com)$/.test(referrer.hostname);
+        if (target && blockedHost(target.hostname) && !videoSite) return new Response(null, { status: 204 });
+      }
+      await scramjet.loadConfig();
+      if (scramjet.route(event)) return shield(event, await scramjet.fetch(event));
+      if (uv.route(event)) return shield(event, await uv.fetch(event));
+      if (url.pathname.startsWith(BASE + 'api/')) return fetch(event.request);
+      if (url.pathname.startsWith(ISOLATED) && url.pathname.includes('/image/')) return isolate(event.request, await fetch(event.request));
+      if (proxyPath(url.pathname)) return new Response('There was an error loading this page.', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      if (event.request.method === 'GET' && !url.pathname.endsWith('/wisp/')) return isolate(event.request, await shell(event.request));
+      return fetch(event.request);
+    } catch (e) {
+      if (proxyPath(url.pathname)) return new Response('There was an error loading this page.', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      try { return await fetch(event.request); } catch (err) { return new Response('Offline', { status: 503 }); }
     }
-    await scramjet.loadConfig();
-    if (scramjet.route(event)) return scramjet.fetch(event);
-    if (uv.route(event)) return uv.fetch(event);
-    const url = new URL(event.request.url);
-    if (url.pathname.startsWith(BASE + 'api/')) return fetch(event.request);
-    if (url.pathname.startsWith(ISOLATED) && url.pathname.includes('/image/')) return isolate(event.request, await fetch(event.request));
-    if (event.request.method === 'GET' && url.origin === location.origin && !url.pathname.endsWith('/wisp/')) return isolate(event.request, await shell(event.request));
-    return fetch(event.request);
   })());
 });

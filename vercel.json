@@ -3,12 +3,13 @@
   "framework": null,
   "outputDirectory": "public",
   "functions": {
-    "api/wisp.js": { "maxDuration": 60 },
-    "api/party.js": { "maxDuration": 60 },
-    "api/generate.js": { "maxDuration": 60 }
+    "api/wisp.js": { "maxDuration": 300 },
+    "api/party.js": { "maxDuration": 300 },
+    "api/generate.js": { "maxDuration": 300 }
   },
   "rewrites": [
-    { "source": "/api/wisp/", "destination": "/api/wisp" }
+    { "source": "/api/wisp/", "destination": "/api/wisp" },
+    { "source": "/api/party/:app/:room/:name", "destination": "/api/party?app=:app&room=:room&name=:name" }
   ],
   "headers": [
     {
