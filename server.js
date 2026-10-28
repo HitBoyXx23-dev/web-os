@@ -4,6 +4,7 @@ import express from 'express';
 import { server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { handleParty, listRooms } from './party.js';
 import { sendImage } from './lib/generate.js';
+import { readJson, sendMoss } from './lib/moss.js';
 import { sendYouTube } from './lib/youtube.js';
 
 const app = express();
@@ -22,7 +23,15 @@ app.get('/api/party', (req, res) => {
   res.json({ ok: true });
 });
 app.get('/api/wisp', (req, res) => res.json({ ok: true }));
-app.get('/api/generate', (req, res) => sendImage(req, res));
+const generate = async (req, res) => {
+  if (req.method === 'POST') req.body = await readJson(req);
+  const style = String((req.body && req.body.style) || req.query.style || '');
+  if (style === 'moss') return sendMoss(req, res);
+  return sendImage(req, res);
+};
+app.get('/api/generate', generate);
+app.post('/api/generate', express.json({ limit: '8mb' }), generate);
+app.delete('/api/generate', generate);
 app.get('/api/youtube', (req, res) => sendYouTube(req, res));
 app.use(express.static(fileURLToPath(new URL('./public', import.meta.url)), { extensions: ['html'] }));
 

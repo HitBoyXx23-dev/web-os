@@ -16,6 +16,7 @@ const MEDIA_MODELS = [
   ['pixel', 'Pixel', 'Crisp pixel art'],
   ['uncensored', 'Uncensored', 'Photo, safety filter off'],
   ['uncensored-anime', 'Uncensored anime', 'Anime, safety filter off'],
+  ['moss', 'MOSS', 'MOSS-Image. Can take a few minutes'],
 ];
 const AI_PROVIDERS = [['local', 'On this device'], ['claude', 'Claude'], ['image', 'Image'], ['video', 'Video']];
 const AI_SYSTEM = 'You are the assistant built into HitBoy Web-OS, a desktop that runs in a web browser. Be helpful, friendly and concise. Use Markdown for code.';
@@ -99,7 +100,7 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     const models = c.provider === 'image' || c.provider === 'video' ? MEDIA_MODELS : c.provider === 'local' ? LOCAL_MODELS : null;
     box.innerHTML = `<div class="seg">${AI_PROVIDERS.map(([k, n]) => `<button data-prov="${k}" class="${c.provider === k ? 'on' : ''}">${n}</button>`).join('')}</div>
       ${models ? `<div class="ai-models">${models.map(([id, n, d]) => `<label><input type="radio" name="aim" value="${id}" ${c.model === id ? 'checked' : ''}><b>${n}</b><small>${d}</small></label>`).join('')}</div>
-        <p class="small muted">${c.provider === 'local' ? 'Downloaded once, then cached. Needs a browser with WebGPU (Chrome, Edge, recent Safari/Firefox) and a few GB of free memory. This model cannot see attached pictures.' : 'Made on this site from the description you type. The result is saved in Files. An attached picture stays in the chat.'}</p>`
+        <p class="small muted">${c.provider === 'local' ? 'Downloaded once, then cached. Needs a browser with WebGPU (Chrome, Edge, recent Safari/Firefox) and a few GB of free memory. This model cannot see attached pictures.' : 'Made on this site from the description you type. The result is saved in Files. MOSS can take a few minutes.'}</p>`
       : `<label class="field">Anthropic API key<input type="password" class="ai-key" placeholder="sk-ant-…" value="${esc(c.key)}" autocomplete="off"></label>
         <p class="small muted">Uses Claude Opus 5.5. Get a key at console.anthropic.com. The key is stored only in this browser — don't save it on a shared computer. Usage is billed to your Anthropic account. Attached pictures are sent with the message so Claude can see them.</p>`}`;
   };
@@ -152,9 +153,12 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
     const style = MEDIA_MODELS.some(m => m[0] === c.model) ? c.model : 'photo';
     const size = video ? GEN_SIZES.wide : GEN_SIZES.square;
     const ctl = new AbortController(); abort = () => ctl.abort();
-    out.content = video ? 'Making the clip…' : 'Making the picture…'; render();
+    out.content = style === 'moss' ? 'MOSS is drawing. This can take a few minutes.' : video ? 'Making the clip…' : 'Making the picture…'; render();
     const ask = (msgs.at(-2).content || '').trim() || 'A picture';
-    const picture = await fetchPicture(genSrc(ask, { style, width: size[0], height: size[1], seed: Math.floor(Math.random() * 1e9) }), ctl.signal);
+    const seed = Math.floor(Math.random() * 1e9);
+    const picture = style === 'moss'
+      ? await fetchMoss(ask, size, ctl.signal)
+      : await fetchPicture(genSrc(ask, { style, width: size[0], height: size[1], seed }), ctl.signal);
     let blob = picture.blob;
     try {
       if (video) { out.content = 'Recording the clip…'; render(); blob = await recordClip([picture.frame], ctl.signal); }
@@ -181,7 +185,7 @@ APPS.assistant = ALL_APPS.assistant = { name: 'Assistant', icon: { mono: 'AI', b
       await (provider === 'claude' ? runClaude : provider === 'image' || provider === 'video' ? runMedia : runLocal)(out, render);
     } catch (e) {
       const m = e?.status === 401 ? 'That API key was rejected. Check it in Model.' : e?.status === 429 ? 'Rate limited — wait a moment and try again.' : e?.name === 'AbortError' || /abort/i.test(e?.message) ? '' : (e?.message || String(e));
-      if (!m && /^(Making the picture…|Making the clip…|Recording the clip…|…)$/.test(out.content)) out.content = '';
+      if (!m && /^(Making the picture…|Making the clip…|Recording the clip…|MOSS is drawing\. This can take a few minutes\.|…)$/.test(out.content)) out.content = '';
       if (m) out.content = (out.content && out.content !== '…' && !out.content.startsWith('Making ') && out.content !== 'Recording the clip…' ? out.content + '\n\n' : '') + '⚠️ ' + m;
     }
     if (!out.content || out.content === '…') msgs.pop();

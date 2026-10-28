@@ -1,13 +1,13 @@
 const GEN_SIZES = { square: [768, 768], wide: [768, 432], tall: [432, 768] };
-const GEN_STYLES = [['photo', 'Photo'], ['illustration', 'Illustration'], ['poster', 'Poster'], ['pixel', 'Pixel'], ['uncensored', 'Uncensored'], ['uncensored-anime', 'Uncensored anime']];
+const GEN_STYLES = [['photo', 'Photo'], ['illustration', 'Illustration'], ['poster', 'Poster'], ['pixel', 'Pixel'], ['uncensored', 'Uncensored'], ['uncensored-anime', 'Uncensored anime'], ['moss', 'MOSS']];
 const GEN_IMAGE_IDEAS = ['A red fox in fresh snow at dusk', 'A tiny bookstore on a rainy street', 'An astronaut planting a garden on the moon', 'A glass lighthouse above a calm sea'];
 const GEN_VIDEO_IDEAS = ['A paper boat drifting down a river', 'A fox running through a snowy forest', 'Clouds racing over a mountain lake', 'A lantern floating up into the night'];
 const genSrc = (prompt, opts) => {
   const q = new URLSearchParams({ prompt, style: opts.style, width: opts.width, height: opts.height, seed: opts.seed });
   return BASE + 'api/generate?' + q;
 };
-async function fetchPicture(src, signal) {
-  const res = await fetch(src, { signal });
+async function fetchPicture(src, signal, body) {
+  const res = await fetch(src, body ? { method: 'POST', signal, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : { signal });
   const type = res.headers.get('content-type') || '';
   if (!res.ok || !type.startsWith('image/')) {
     let message = 'Image generation did not answer. Try again.';
@@ -18,6 +18,42 @@ async function fetchPicture(src, signal) {
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   try { return { blob, frame: await createImageBitmap(blob) }; }
   catch (e) { throw new Error('A frame failed. Try again.'); }
+}
+
+async function fetchMoss(prompt, size, signal) {
+  const start = await fetch(BASE + 'api/generate', {
+    method: 'POST', signal, headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ prompt, style: 'moss', width: size[0], height: size[1] }),
+  });
+  const started = await start.json().catch(() => ({}));
+  if ((!start.ok && start.status !== 202) || !started.id) throw new Error(started.error || 'MOSS did not take the picture. Try again.');
+  const stop = () => fetch(BASE + 'api/generate?style=moss&id=' + encodeURIComponent(started.id), { method: 'DELETE' }).catch(() => {});
+  if (signal) signal.addEventListener('abort', stop, { once: true });
+  const t0 = performance.now();
+  while (performance.now() - t0 < 12 * 60 * 1000) {
+    await new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+      const t = setTimeout(resolve, 3000);
+      signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+    });
+    const res = await fetch(BASE + 'api/generate?style=moss&id=' + encodeURIComponent(started.id), { signal });
+    const type = res.headers.get('content-type') || '';
+    if (type.startsWith('image/')) {
+      const blob = await res.blob();
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      try { return { blob, frame: await createImageBitmap(blob) }; }
+      catch (e) { throw new Error('A frame failed. Try again.'); }
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && res.status !== 202) throw new Error(data.error || 'MOSS did not return a picture. Try again.');
+  }
+  stop();
+  throw new Error('MOSS is busy. Try again in a moment.');
+}
+async function loadFrame(prompt, style, size, signal) {
+  if (style === 'moss') return fetchMoss(prompt, size, signal);
+  const seed = Math.floor(Math.random() * 1e9);
+  return fetchPicture(genSrc(prompt, { style, width: size[0], height: size[1], seed }), signal);
 }
 
 function studioShell(body, kind) {
@@ -60,11 +96,12 @@ APPS.image = ALL_APPS.image = { name: 'Image', icon: { mono: 'Img', bg: '#0d9488
   const go = async prompt => {
     prompt = prompt.trim();
     if (!prompt || busy) return;
-    busy = true; ctl = new AbortController(); ui.status('Generating…');
+    busy = true; ctl = new AbortController();
+    const style = ui.choice('style');
+    ui.status(style === 'moss' ? 'MOSS is drawing. This can take a few minutes.' : 'Generating…');
     const size = GEN_SIZES[ui.choice('size')];
-    const src = genSrc(prompt, { style: ui.choice('style'), width: size[0], height: size[1], seed: Math.floor(Math.random() * 1e9) });
     try {
-      const picture = await fetchPicture(src, ctl.signal);
+      const picture = await loadFrame(prompt, style, size, ctl.signal);
       picture.frame.close();
       blob = picture.blob;
       name = prompt.slice(0, 40);
@@ -95,11 +132,11 @@ APPS.video = ALL_APPS.video = { name: 'Video', icon: { mono: 'Vid', bg: '#e11d48
     if (!prompt || busy) return;
     if (typeof MediaRecorder === 'undefined') return ui.status('This browser cannot record a clip.');
     busy = true; ctl = new AbortController(); name = prompt.slice(0, 40);
+    const style = ui.choice('style');
     const size = GEN_SIZES[ui.choice('size')];
-    const src = genSrc(prompt, { style: ui.choice('style'), width: size[0], height: size[1], seed: Math.floor(Math.random() * 1e9) });
     try {
-      ui.status('Generating…');
-      const picture = await fetchPicture(src, ctl.signal);
+      ui.status(style === 'moss' ? 'MOSS is drawing. This can take a few minutes.' : 'Generating…');
+      const picture = await loadFrame(prompt, style, size, ctl.signal);
       ui.status('Recording the clip…');
       try { blob = await recordClip([picture.frame], ctl.signal); }
       finally { picture.frame.close(); }
