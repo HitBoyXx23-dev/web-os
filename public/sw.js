@@ -1,18 +1,23 @@
 // HitBoy Web-OS service worker (scope: the site root).
-// 1. Scramjet proxy  2. Ultraviolet proxy (fallback engine)  3. Offline cache for the OS itself.
+// 1. HitBoy Proxy (public/hitboy/engine.js, this site's own rewriter)
+// 2. Scramjet (separate page engine)
+// 3. Ultraviolet still answers old /uv/ links; it is not the HitBoy engine
+// 4. Offline cache for the OS itself.
 importScripts('scram/scramjet.all.js');
 importScripts('uv/uv.bundle.js', 'uv/uv.config.js', 'uv/uv.sw.js');
+importScripts('baremux/index.js');
+importScripts('hitboy/engine.js');
 
 const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v21';
+const CACHE = 'novaos-v22';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
   ...['icons', 'fs', 'wm', 'games', 'dos', 'browser', 'apps', 'vmbox', 'fatimg', 'runners', 'catalog', 'catalog-data', 'chat', 'ai', 'generate', 'code', 'friendslop', 'live', 'doodle', 'games2', 'games3d', 'linux', 'users', 'setup', 'shells', 'os', 'arrange'].map(f => `js/${f}.js`),
-  'scram/scramjet.all.js', 'uv/uv.bundle.js', 'uv/uv.config.js', 'baremux/index.js'].map(p => BASE + p);
+  'scram/scramjet.all.js', 'uv/uv.bundle.js', 'uv/uv.config.js', 'baremux/index.js', 'hitboy/engine.js'].map(p => BASE + p);
 
 self.addEventListener('install', e => {
   self.skipWaiting();
@@ -68,20 +73,41 @@ self.addEventListener('message', e => {
   if (e.data?.hitboy !== 'adblock') return;
   adblock = !!e.data.on; caches.open(SETTINGS).then(c => c.put('/__adblock', new Response(adblock ? '1' : '0'))).catch(() => {});
 });
-// The real address behind a proxied request (Scramjet: /scramjet/<encoded URL>; Ultraviolet: /uv/service/<xor codec>).
+// The real address behind a proxied request.
+// HitBoy: /hb/<absolute URL>. Scramjet: /scramjet/<encoded URL>. Ultraviolet: /uv/service/<xor codec>.
 function proxiedTarget(url) {
   try {
+    const hit = self.HitBoyProxy && HitBoyProxy.targetOf(url.href, BASE);
+    if (hit) return hit;
     if (url.pathname.startsWith(BASE + 'scramjet/')) return new URL(decodeURIComponent(url.pathname.slice(BASE.length + 9)));
     if (url.pathname.startsWith(__uv$config.prefix)) return new URL(__uv$config.decodeUrl(url.pathname.slice(__uv$config.prefix.length)));
   } catch (e) {}
   return null;
 }
 
-const PROXY_PREFIXES = [BASE + 'scramjet/', BASE + 'uv/'];
+const PROXY_PREFIXES = [BASE + 'hb/', BASE + 'scramjet/', BASE + 'uv/'];
 const proxyPath = path => PROXY_PREFIXES.some(p => path.startsWith(p));
 // Proxied pages are same-origin with the desktop, so a framed site can reach the real top window.
 // Hide that window: top stays inside the proxy, and parent does too when the parent is the desktop.
-const FRAME_GUARD = `<script>(function(){try{var w=window,marks=${JSON.stringify([BASE + 'scramjet/', BASE + 'uv/'])};function proxied(win){try{var p=String(win.location.pathname);for(var i=0;i<marks.length;i++)if(p.indexOf(marks[i])===0)return true;}catch(e){}return false;}if(!proxied(w))return;var topProxy=w;try{var p=w;while(p.parent&&p.parent!==p&&proxied(p.parent))p=p.parent;topProxy=p;}catch(e){}try{Object.defineProperty(w,"top",{configurable:true,get:function(){return topProxy;}});}catch(e){}try{if(w.parent&&!proxied(w.parent))Object.defineProperty(w,"parent",{configurable:true,get:function(){return w;}});}catch(e){}}catch(e){}})();</script>`;
+const FRAME_GUARD = `<script>(function(){try{var w=window,marks=${JSON.stringify([BASE + 'hb/', BASE + 'scramjet/', BASE + 'uv/'])};function proxied(win){try{var p=String(win.location.pathname);for(var i=0;i<marks.length;i++)if(p.indexOf(marks[i])===0)return true;}catch(e){}return false;}if(!proxied(w))return;var topProxy=w;try{var p=w;while(p.parent&&p.parent!==p&&proxied(p.parent))p=p.parent;topProxy=p;}catch(e){}try{Object.defineProperty(w,"top",{configurable:true,get:function(){return topProxy;}});}catch(e){}try{if(w.parent&&!proxied(w.parent))Object.defineProperty(w,"parent",{configurable:true,get:function(){return w;}});}catch(e){}}catch(e){}})();</script>`;
+
+const HB_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+let hbClient = null;
+function hitboyClient() { return hbClient || (hbClient = new BareMux.BareClient()); }
+async function hitboyFetch(event) {
+  const target = HitBoyProxy.targetOf(event.request.url, BASE);
+  if (!target) return new Response('There was an error loading this page.', { status: 400, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+  const req = event.request;
+  const headers = { 'user-agent': HB_UA, accept: req.headers.get('accept') || '*/*', 'accept-language': req.headers.get('accept-language') || 'en-US,en;q=0.9' };
+  const range = req.headers.get('range'); if (range) headers.range = range;
+  const ctype = req.headers.get('content-type'); if (ctype) headers['content-type'] = ctype;
+  try { headers.referer = target.origin + '/'; } catch (e) {}
+  let body;
+  if (req.method !== 'GET' && req.method !== 'HEAD') body = await req.arrayBuffer();
+  const res = await hitboyClient().fetch(target.href, { method: req.method, headers, body, redirect: 'follow' });
+  const finalURL = res.finalURL || target.href;
+  return HitBoyProxy.rewriteResponse(res, finalURL, self.location.origin + BASE, req.destination);
+}
 
 async function shield(event, res) {
   const dest = event.request.destination;
@@ -108,6 +134,10 @@ self.addEventListener('fetch', event => {
         let referrer = null; try { referrer = proxiedTarget(new URL(event.request.referrer)); } catch (e) {}
         const videoSite = referrer && /(^|\.)(youtube\.com|youtu\.be|googlevideo\.com|ytimg\.com|twitch\.tv|spotify\.com)$/.test(referrer.hostname);
         if (target && blockedHost(target.hostname) && !videoSite) return new Response(null, { status: 204 });
+      }
+      if (url.pathname.startsWith(BASE + 'hb/')) {
+        try { return shield(event, await hitboyFetch(event)); }
+        catch (err) { return new Response('There was an error loading this page.', { status: 502, headers: { 'content-type': 'text/plain; charset=utf-8' } }); }
       }
       await scramjet.loadConfig();
       if (scramjet.route(event)) return shield(event, await scramjet.fetch(event));

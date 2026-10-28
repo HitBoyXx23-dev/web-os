@@ -1,18 +1,19 @@
-// Proxy browser — HitBoy Proxy: Scramjet or Ultraviolet rewrite pages; the HitBoy transport carries the
-// traffic over Wisp (libcurl.js with an automatic Epoxy fallback, via bare-mux). Also the App Store catalog.
+// Proxy browser. HitBoy Proxy (public/hitboy/engine.js) and Scramjet are different page engines.
+// The connection (libcurl.js, with Epoxy if that connection fails) carries either engine over Wisp.
+// Also the App Store catalog.
 const BASE = location.pathname.replace(/[^/]*$/, '');
 
 const WebProxy = {
   _ready: null, _sj: null,
-  ENGINES: { hitboy: 'HitBoy Proxy', scramjet: 'Scramjet' }, // Ultraviolet stays as HitBoy Proxy's automatic fallback
+  ENGINES: { hitboy: 'HitBoy Proxy', scramjet: 'Scramjet' },
   TRANSPORTS: { hitboy: 'Automatic', libcurl: 'libcurl only', epoxy: 'Epoxy only' },
   engine() { return this.ENGINES[OS.cfg.engine] ? OS.cfg.engine : 'hitboy'; },
-  // HitBoy Proxy picks the page engine per site: Scramjet, or Ultraviolet for sites that failed in Scramjet.
+  // Older builds stored a per-site Ultraviolet fallback here. HitBoy no longer uses that.
   siteEngines() { try { return JSON.parse(localStorage.getItem('novaos.pxSites')) || {}; } catch (e) { return {}; } },
-  setSiteEngine(url, eng) { const m = this.siteEngines(), h = hostOf(url); if (eng) m[h] = eng; else delete m[h]; try { localStorage.setItem('novaos.pxSites', JSON.stringify(m)); } catch (e) {} },
-  engineFor(url) { const e = this.engine(); return e !== 'hitboy' ? e : this.siteEngines()[hostOf(url)] || 'scramjet'; },
+  setSiteEngine() {},
+  engineFor() { return this.engine() === 'scramjet' ? 'scramjet' : 'hitboy'; },
   transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'hitboy'; },
-  supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.$scramjetLoadController && self.__uv$config; },
+  supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.HitBoyProxy && self.$scramjetLoadController; },
   _auto: null,
   ownWisp() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE + 'api/wisp/'; },
   wispUrl() { return this._auto || this.ownWisp(); },
@@ -44,6 +45,12 @@ const WebProxy = {
       for (const r of await navigator.serviceWorker.getRegistrations()) if (r.scope !== new URL(BASE, location).href) await r.unregister();
       await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE });
       await navigator.serviceWorker.ready;
+      if (!navigator.serviceWorker.controller) {
+        await new Promise(res => {
+          navigator.serviceWorker.addEventListener('controllerchange', res, { once: true });
+          setTimeout(res, 1500);
+        });
+      }
       this.syncAdblock();
       await this.setTransport();
     })().catch(e => { this._ready = null; throw e; });
@@ -63,10 +70,18 @@ const WebProxy = {
     else if (this.transport() === 'libcurl') await conn.setTransport(BASE + 'libcurl/index.mjs', [{ websocket: this.wispUrl() }]);
     else await conn.setTransport(BASE + 'epoxy/index.mjs', [{ wisp: this.wispUrl() }]);
   },
-  encode(url, eng = this.engineFor(url)) { return eng === 'uv' ? __uv$config.prefix + __uv$config.encodeUrl(url) : this._sj.encodeUrl(url); },
-  // Real URL behind a proxied path+query, from either engine.
+  encode(url, eng = this.engineFor(url)) {
+    if (eng === 'scramjet') return this._sj.encodeUrl(url);
+    if (eng === 'uv' && self.__uv$config) return __uv$config.prefix + __uv$config.encodeUrl(url);
+    return HitBoyProxy.encode(url, BASE);
+  },
+  // Real URL behind a proxied path+query, from whichever engine served it.
   decode(path) {
-    if (path.startsWith(__uv$config.prefix)) return __uv$config.decodeUrl(path.slice(__uv$config.prefix.length));
+    try {
+      const hit = HitBoyProxy.targetOf(location.origin + path, BASE);
+      if (hit) return hit.href;
+    } catch (e) {}
+    if (self.__uv$config && path.startsWith(__uv$config.prefix)) return __uv$config.decodeUrl(path.slice(__uv$config.prefix.length));
     if (this._sj && path.startsWith(BASE + 'scramjet/')) { try { return this._sj.decodeUrl(location.origin + path); } catch (e) {} }
     return null;
   },
@@ -133,7 +148,14 @@ function BrowserApp(body, win, opts = {}) {
   const proxyOn = () => OS.cfg.proxy !== false;
   const loading = on => { bar.style.opacity = 1; bar.style.width = on ? '70%' : '100%'; if (!on) setTimeout(() => { bar.style.opacity = 0; bar.style.width = 0; }, 300); };
 
-  const renderPx = () => { const b = $b('.px'), on = proxyOn() && !(cur && cur.direct); b.innerHTML = glyph('shield', 12) + (on ? 'HitBoy Proxy' : 'Direct'); b.classList.toggle('on', on); b.title = 'Proxy options'; };
+  const engineName = eng => eng === 'scramjet' ? 'Scramjet' : 'HitBoy Proxy';
+  const renderPx = () => {
+    const b = $b('.px'), on = proxyOn() && !(cur && cur.direct);
+    const eng = on && cur && cur.engine ? cur.engine : WebProxy.engine();
+    b.innerHTML = glyph('shield', 12) + (on ? engineName(eng) : 'Direct');
+    b.classList.toggle('on', on);
+    b.title = 'Proxy options';
+  };
   const renderBookmarks = () => {
     const bms = OS.cfg.bookmarks || [];
     $b('.bmbar').innerHTML = bms.map((b, i) => `<button data-i="${i}" title="${esc(b.url)}">${esc(b.title.slice(0, 28))}</button>`).join('');
@@ -176,19 +198,50 @@ function BrowserApp(body, win, opts = {}) {
     if (proxyOn()) OS.proxyStatus().then(([ok, m]) => { const s = t.el.querySelector('.nt-status'); if (s) { s.textContent = m; s.previousElementSibling.className = 'dot ' + (ok ? 'ok' : 'bad'); } });
     if (t === cur) { u.value = ''; renderTabs(); renderBookmarks(); setTimeout(() => q.focus()); }
   };
-  // A YouTube video plays from a normal video file. The watch page itself, loaded through this
-  // server, stops on "Sign in to confirm you're not a bot".
-  const playYouTube = async (t, url, id) => {
+  const findVideo = (doc, depth = 0) => {
+    if (!doc || depth > 4) return null;
+    const video = doc.querySelector('video');
+    if (video) return video;
+    for (const frame of doc.querySelectorAll('iframe')) {
+      try { const inner = findVideo(frame.contentDocument, depth + 1); if (inner) return inner; } catch (e) {}
+    }
+    return null;
+  };
+  const youtubeBlocked = (t, ctl) => new Promise(resolve => {
+    const start = performance.now();
+    const tick = () => {
+      if (ctl.signal.aborted) return resolve(false);
+      let doc = null;
+      try { doc = t.frame?.contentDocument; } catch (e) {}
+      if (doc) {
+        const video = findVideo(doc);
+        if (video && (video.currentTime > 0.2 || (video.readyState >= 2 && video.duration > 0 && !/not a bot/i.test(doc.documentElement?.innerHTML || '')))) {
+          video.muted = false;
+          video.play?.().catch(() => {});
+          return resolve(false);
+        }
+        const blob = (doc.body?.innerText || '') + '\n' + (doc.documentElement?.innerHTML || '').slice(0, 250000);
+        if (/confirm you.?re not a bot|sign in to confirm|unusual traffic from|There was an error loading/i.test(blob)) return resolve(true);
+      }
+      if (performance.now() - start > 8000) resolve(!doc || !findVideo(doc));
+      else setTimeout(tick, 400);
+    };
+    tick();
+  });
+  // The watch page is the real YouTube page. This server's address often gets "Sign in to confirm you're not a bot",
+  // and then the same video plays here from the file YouTube (or a mirror) hands back.
+  const playYouTube = async (t, url, id, because) => {
     t.ytCtl?.abort();
     const ctl = new AbortController(); t.ytCtl = ctl;
-    t.direct = false; t.url = url; t.title = 'YouTube'; t.frame = null;
+    t.direct = false; t.url = url; t.title = 'YouTube'; t.frame = null; t.engine = null;
     if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); renderPx(); }
     loading(true);
-    t.el.innerHTML = `<div class="ytplay"><div class="ytstage"><video controls playsinline></video><div class="ytwait">Loading the video…</div></div>
-      <div class="ytmeta"><b class="yttitle">YouTube</b><span class="ytauthor muted small"></span><button type="button" class="ghost small" data-yt="page">Open the YouTube page</button></div></div>`;
+    t.el.innerHTML = `<div class="ytplay"><div class="ytstage"><video controls playsinline muted></video><div class="ytwait">Loading the video…</div></div>
+      <div class="ytmeta"><b class="yttitle">YouTube</b><span class="ytauthor muted small"></span>${because ? `<span class="muted small ytwhy">${esc(because)}</span>` : ''}<button type="button" class="ghost small" data-yt="sound">Sound</button><button type="button" class="ghost small" data-yt="page">Open the YouTube page</button></div></div>`;
     const video = t.el.querySelector('video'), wait = t.el.querySelector('.ytwait'), audio = document.createElement('audio');
-    audio.hidden = true; t.el.querySelector('.ytplay').appendChild(audio);
+    audio.hidden = true; audio.muted = true; t.el.querySelector('.ytplay').appendChild(audio);
     t.el.querySelector('[data-yt=page]').onclick = () => navigate(t, url, false, proxyOn() ? 'page' : 'direct');
+    t.el.querySelector('[data-yt=sound]').onclick = () => { video.muted = false; audio.muted = false; video.play().catch(() => {}); };
     const fail = msg => { if (ctl.signal.aborted) return; loading(false); wait.hidden = false; wait.textContent = msg; };
     try {
       const r = await fetch(BASE + 'api/youtube?v=' + encodeURIComponent(id), { signal: ctl.signal });
@@ -220,20 +273,45 @@ function BrowserApp(body, win, opts = {}) {
       fail(e.message || 'The video did not load.');
     }
   };
-  // force: 'scramjet' or 'uv' to pick the engine for this load, 'direct' to skip the proxy, 'page' to open a YouTube watch page as a page.
+  const openYouTube = async (t, url, id) => {
+    t.ytCtl?.abort();
+    const ctl = new AbortController(); t.ytCtl = ctl;
+    if (!proxyOn()) return playYouTube(t, url, id, '');
+    // The watch page from this server usually embeds "Sign in to confirm you're not a bot".
+    // Reading that response avoids running YouTube's scripts when the player cannot start.
+    try {
+      await WebProxy.ready();
+      const probe = await fetch(WebProxy.encode(url, WebProxy.engineFor()));
+      const html = await probe.text();
+      if (/confirm you.?re not a bot|sign in to confirm|unusual traffic/i.test(html)) {
+        return playYouTube(t, url, id, 'YouTube asked this server to sign in, so the video is playing here.');
+      }
+    } catch (e) {}
+    await navigate(t, url, false, 'ytpage');
+    if (ctl.signal.aborted) return;
+    if (await youtubeBlocked(t, ctl)) {
+      if (!ctl.signal.aborted) return playYouTube(t, url, id, 'YouTube asked this server to sign in, so the video is playing here.');
+    } else if (!ctl.signal.aborted) t.pageWanted = false;
+  };
+  // force: 'hitboy' or 'scramjet' picks the page engine, 'direct' skips the proxy,
+  // 'page' opens a YouTube watch page and leaves it there, 'ytpage' is the same load used before the file fallback.
   const navigate = async (t, url, retry, force) => {
     if (!retry) t.retried = false;
-    t.ytCtl?.abort(); t.ytCtl = null;
-    if (force === 'page') t.pageWanted = true; else t.pageWanted = false;
-    const vid = force === 'page' || force === 'direct' ? null : youtubeId(url);
-    if (vid) return playYouTube(t, url, vid);
-    const direct = force === 'direct' || !proxyOn(); t.direct = direct; if (t === cur) renderPx();
-    t.url = url; t.title = hostOf(url); if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); }
+    if (force !== 'ytpage') { t.ytCtl?.abort(); t.ytCtl = null; }
+    if (force === 'page' || force === 'ytpage') t.pageWanted = true; else t.pageWanted = false;
+    const vid = force === 'page' || force === 'ytpage' || force === 'direct' || force === 'file' ? null : youtubeId(url);
+    if (vid) return openYouTube(t, url, vid);
+    const direct = force === 'direct' || !proxyOn(); t.direct = direct;
+    t.url = url; t.title = hostOf(url);
     let src = url;
     loading(true);
     if (!direct) {
       t.el.innerHTML = '';
-      try { await WebProxy.ready(); t.engine = force || WebProxy.engineFor(url); src = WebProxy.encode(url, t.engine); }
+      try {
+        await WebProxy.ready();
+        t.engine = force === 'scramjet' || force === 'hitboy' ? force : WebProxy.engineFor();
+        src = WebProxy.encode(url, t.engine);
+      }
       catch (e) {
         loading(false);
         t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
@@ -244,7 +322,9 @@ function BrowserApp(body, win, opts = {}) {
         return;
       }
     }
+    if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); renderPx(); }
     t.el.innerHTML = ''; const f = document.createElement('iframe');
+    f.dataset.engine = t.engine || '';
     f.setAttribute('allow', 'autoplay; fullscreen; clipboard-write; gamepad; encrypted-media');
     f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock allow-downloads allow-presentation');
     f.setAttribute('allowfullscreen', ''); f.src = src; t.el.appendChild(f); t.frame = f;
@@ -255,19 +335,11 @@ function BrowserApp(body, win, opts = {}) {
         if (real) t.url = real;
         t.title = f.contentDocument.title || hostOf(t.url);
         const clicked = youtubeId(t.url);
-        if (clicked && !t.pageWanted) return playYouTube(t, t.url, clicked);
+        if (clicked && !t.pageWanted) return openYouTube(t, t.url, clicked);
         // links that try to open new windows open as new tabs instead
         f.contentWindow.open = (href) => { if (href) newTab(new URL(href, t.url).href); return null; };
-        // HitBoy Proxy: if this engine's error page shows up, retry the site once with the other engine and remember it
-        const text = f.contentDocument.body?.innerText || '';
-        const failed = text.length < 3000 && /There was an error loading|Error processing your request/.test(text); // the engines' own error pages
-        if (failed && WebProxy.engine() === 'hitboy' && !t.retried) {
-          t.retried = true; const other = t.engine === 'uv' ? 'scramjet' : 'uv';
-          WebProxy.setSiteEngine(t.url, other === 'scramjet' ? null : other);
-          return navigate(t, t.url, true);
-        }
       } catch (e) {}
-      if (t === cur) { u.value = t.url; renderBookmarks(); } renderTabs();
+      if (t === cur) { u.value = t.url; renderBookmarks(); renderPx(); } renderTabs();
       if (!t.private) addHistory(t.url, t.title);
     };
   };
@@ -290,13 +362,13 @@ function BrowserApp(body, win, opts = {}) {
     OS.set({ bookmarks: bms }); renderBookmarks();
   };
   $b('.bmbar').onclick = e => { const b = e.target.closest('button'); if (b) navigate(cur, OS.cfg.bookmarks[b.dataset.i].url); };
-  // Proxy menu: on/off, retry with the other engine, load without the proxy, copy the address, private tab.
+  // Proxy menu: on/off, open the same page in the other engine, load without the proxy, copy the address, private tab.
   $b('.px').onclick = e => {
     const r = e.currentTarget.getBoundingClientRect(), on = proxyOn(), page = cur.url && cur.url.startsWith('http');
-    const other = cur.engine === 'uv' ? 'scramjet' : 'uv';
+    const other = cur.engine === 'scramjet' ? 'hitboy' : 'scramjet';
     OS.menu($('#ctx-menu'), [
       ['shield', on ? 'Turn proxy off' : 'Turn proxy on', () => { OS.set({ proxy: !on }); renderPx(); if (cur.url) navigate(cur, cur.url); else home(cur); }],
-      ...(page && on ? [['reload', other === 'uv' ? 'Retry with the backup engine' : 'Retry with Scramjet', () => { WebProxy.setSiteEngine(cur.url, other === 'uv' ? 'uv' : null); navigate(cur, cur.url, true, other); }],
+      ...(page && on ? [['reload', 'Open this page with ' + engineName(other), () => { OS.set({ engine: other }); navigate(cur, cur.url, true, other); }],
         ['external', 'Load this page without the proxy', () => navigate(cur, cur.url, false, 'direct')]] : []),
       ...(page ? [['file', 'Copy page address', () => navigator.clipboard?.writeText(cur.url).then(() => OS.toast('Address copied'))]] : []),
       '-', ['user', 'New private tab', () => newTab(undefined, true)], ['settings', 'Proxy settings…', () => OS.launch('settings', 'proxy')],
