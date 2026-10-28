@@ -344,7 +344,7 @@ const APPS = {
         ${row('Proxy cookies and site data', 'Signs you out of proxied sites. Fixes sites stuck in a login or "checking your browser" loop.', `<button class="danger pxclear">Clear…</button>`)}
         ${row('Server', 'The proxy, virtual machines, live chat and multiplayer use this site automatically.', `<span class="small">${esc(location.host)}</span>`)}
         <div class="status-line"><span class="dot" id="st-dot"></span><span id="st-px">Checking…</span></div>
-        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="row"><div class="l grow"><span>Proxy test</span><small>Checks this site's server, then loads well-known sites through the proxy and explains anything that fails.</small></div><button class="pt-run">Run test</button></div><div class="pt-out"></div></div>`;
+        <div class="set-row" style="flex-direction:column;align-items:stretch"><div class="row"><div class="l grow"><span>Proxy test</span><small>Checks this site's server, then YouTube playback and well-known sites through the proxy.</small></div><button class="pt-run">Run test</button></div><div class="pt-out"></div></div>`;
       if (page === 'privacy') html = `<h3>Privacy</h3>
         ${row('Tab disguise', 'Changes the browser tab title and icon', `<select class="ck">${Object.keys(CLOAKS).map(k => `<option ${(c.cloak || 'None') === k ? 'selected' : ''}>${k}</option>`).join('')}</select>`)}
         ${row('Open in about:blank', 'Runs HitBoy Web-OS inside a blank tab that stays out of your history', `<button class="blank">${glyph('external', 14)}Open</button>`)}

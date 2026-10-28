@@ -4,6 +4,7 @@ import express from 'express';
 import { server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { handleParty, listRooms } from './party.js';
 import { sendImage } from './lib/generate.js';
+import { sendYouTube } from './lib/youtube.js';
 
 const app = express();
 app.use('/vm/ubuntu24', (req, res, next) => {
@@ -22,6 +23,7 @@ app.get('/api/party', (req, res) => {
 });
 app.get('/api/wisp', (req, res) => res.json({ ok: true }));
 app.get('/api/generate', (req, res) => sendImage(req, res));
+app.get('/api/youtube', (req, res) => sendYouTube(req, res));
 app.use(express.static(fileURLToPath(new URL('./public', import.meta.url)), { extensions: ['html'] }));
 
 const server = createServer(app);

@@ -5,7 +5,8 @@
   "functions": {
     "api/wisp.js": { "maxDuration": 300 },
     "api/party.js": { "maxDuration": 300 },
-    "api/generate.js": { "maxDuration": 300 }
+    "api/generate.js": { "maxDuration": 300 },
+    "api/youtube.js": { "maxDuration": 60 }
   },
   "rewrites": [
     { "source": "/api/wisp/", "destination": "/api/wisp" },

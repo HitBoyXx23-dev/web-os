@@ -91,6 +91,26 @@ const QUICK_LINKS = [
   { name: 'Wikipedia', img: 'wikipedia', mono: 'W', bg: '#3f3f46', url: 'https://en.wikipedia.org' },
 ];
 const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return u; } };
+// Watch, Shorts, embed, live and youtu.be links. The homepage and search stay as normal pages.
+function youtubeId(url) {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, '').replace(/^m\./, '');
+    if (host === 'youtu.be') {
+      const id = (u.pathname.split('/').filter(Boolean)[0] || '').replace(/[^-\w].*$/, '');
+      return /^[\w-]{11}$/.test(id) ? id : null;
+    }
+    if (host === 'youtube.com' || host === 'youtube-nocookie.com' || host === 'music.youtube.com') {
+      if (u.pathname === '/watch') {
+        const id = u.searchParams.get('v') || '';
+        return /^[\w-]{11}$/.test(id) ? id : null;
+      }
+      const m = u.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]{11})/);
+      return m ? m[1] : null;
+    }
+  } catch (e) {}
+  return null;
+}
 const monoOf = u => { const h = hostOf(u); return h.charAt(0).toUpperCase() + (h.charAt(1) || ''); };
 
 // opts: { url, single, title } — single = app mode (no tab strip).
@@ -142,11 +162,13 @@ function BrowserApp(body, win, opts = {}) {
     return t;
   };
   const closeTab = t => {
+    t.ytCtl?.abort();
     const i = tabs.indexOf(t); t.el.remove(); tabs.splice(i, 1);
     if (!tabs.length) return opts.single ? WM.close(win.id) : newTab();
     if (cur === t) select(tabs[Math.max(0, i - 1)]); else renderTabs();
   };
   const home = t => {
+    t.ytCtl?.abort(); t.ytCtl = null;
     t.url = ''; t.title = 'New Tab'; t.frame = null; t.el.innerHTML = homeHtml();
     const q = t.el.querySelector('.nt-q input');
     q.onkeydown = e => e.key === 'Enter' && q.value.trim() && navigate(t, toUrl(q.value));
@@ -154,9 +176,57 @@ function BrowserApp(body, win, opts = {}) {
     if (proxyOn()) OS.proxyStatus().then(([ok, m]) => { const s = t.el.querySelector('.nt-status'); if (s) { s.textContent = m; s.previousElementSibling.className = 'dot ' + (ok ? 'ok' : 'bad'); } });
     if (t === cur) { u.value = ''; renderTabs(); renderBookmarks(); setTimeout(() => q.focus()); }
   };
-  // force: 'scramjet' or 'uv' to pick the engine for this load, or 'direct' to load without the proxy.
+  // A YouTube video plays from a normal video file. The watch page itself, loaded through this
+  // server, stops on "Sign in to confirm you're not a bot".
+  const playYouTube = async (t, url, id) => {
+    t.ytCtl?.abort();
+    const ctl = new AbortController(); t.ytCtl = ctl;
+    t.direct = false; t.url = url; t.title = 'YouTube'; t.frame = null;
+    if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); renderPx(); }
+    loading(true);
+    t.el.innerHTML = `<div class="ytplay"><div class="ytstage"><video controls playsinline></video><div class="ytwait">Loading the video…</div></div>
+      <div class="ytmeta"><b class="yttitle">YouTube</b><span class="ytauthor muted small"></span><button type="button" class="ghost small" data-yt="page">Open the YouTube page</button></div></div>`;
+    const video = t.el.querySelector('video'), wait = t.el.querySelector('.ytwait'), audio = document.createElement('audio');
+    audio.hidden = true; t.el.querySelector('.ytplay').appendChild(audio);
+    t.el.querySelector('[data-yt=page]').onclick = () => navigate(t, url, false, proxyOn() ? 'page' : 'direct');
+    const fail = msg => { if (ctl.signal.aborted) return; loading(false); wait.hidden = false; wait.textContent = msg; };
+    try {
+      const r = await fetch(BASE + 'api/youtube?v=' + encodeURIComponent(id), { signal: ctl.signal });
+      const data = await r.json().catch(() => ({}));
+      if (ctl.signal.aborted) return;
+      if (!r.ok || !data.video) throw new Error(data.error || 'This video has no playable file.');
+      t.title = data.title || 'YouTube';
+      t.el.querySelector('.yttitle').textContent = t.title;
+      t.el.querySelector('.ytauthor').textContent = [data.author, data.quality].filter(Boolean).join(' · ');
+      if (t === cur) { renderTabs(); renderBookmarks(); }
+      video.src = data.video;
+      if (data.audio) {
+        audio.src = data.audio;
+        const sync = () => { if (Math.abs((audio.currentTime || 0) - (video.currentTime || 0)) > 0.35) audio.currentTime = video.currentTime; };
+        video.addEventListener('play', () => { sync(); audio.play().catch(() => {}); });
+        video.addEventListener('pause', () => audio.pause());
+        video.addEventListener('ended', () => audio.pause());
+        video.addEventListener('seeking', sync);
+        video.addEventListener('timeupdate', sync);
+        video.addEventListener('ratechange', () => { audio.playbackRate = video.playbackRate || 1; });
+        video.addEventListener('volumechange', () => { audio.muted = video.muted; audio.volume = video.volume; });
+      }
+      video.onloadeddata = () => { if (!ctl.signal.aborted) { wait.hidden = true; loading(false); } };
+      video.onerror = () => fail('The video file did not play. Open the YouTube page instead.');
+      video.play().catch(() => { if (!ctl.signal.aborted && !video.error) { wait.hidden = true; loading(false); } });
+      if (!t.private) addHistory(t.url, t.title);
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      fail(e.message || 'The video did not load.');
+    }
+  };
+  // force: 'scramjet' or 'uv' to pick the engine for this load, 'direct' to skip the proxy, 'page' to open a YouTube watch page as a page.
   const navigate = async (t, url, retry, force) => {
     if (!retry) t.retried = false;
+    t.ytCtl?.abort(); t.ytCtl = null;
+    if (force === 'page') t.pageWanted = true; else t.pageWanted = false;
+    const vid = force === 'page' || force === 'direct' ? null : youtubeId(url);
+    if (vid) return playYouTube(t, url, vid);
     const direct = force === 'direct' || !proxyOn(); t.direct = direct; if (t === cur) renderPx();
     t.url = url; t.title = hostOf(url); if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); }
     let src = url;
@@ -184,6 +254,8 @@ function BrowserApp(body, win, opts = {}) {
         const real = WebProxy.decode(f.contentWindow.location.pathname + f.contentWindow.location.search + f.contentWindow.location.hash);
         if (real) t.url = real;
         t.title = f.contentDocument.title || hostOf(t.url);
+        const clicked = youtubeId(t.url);
+        if (clicked && !t.pageWanted) return playYouTube(t, t.url, clicked);
         // links that try to open new windows open as new tabs instead
         f.contentWindow.open = (href) => { if (href) newTab(new URL(href, t.url).href); return null; };
         // HitBoy Proxy: if this engine's error page shows up, retry the site once with the other engine and remember it
@@ -269,11 +341,19 @@ async function proxyTest(out) {
   { const t0 = performance.now(), ok = await WebProxy.probe(u, 4000); row('This site', ok, ok ? `connected in ${Math.round(performance.now() - t0)} ms` : 'no answer'); }
   try { await WebProxy.ready(); await WebProxy.setTransport(); } catch (e) { return row('Proxy', false, e.message); }
   row('Server', null, location.host);
+  {
+    const t0 = performance.now();
+    try {
+      const r = await fetch(BASE + 'api/youtube?v=jNQXAC9IVRw');
+      const data = await r.json();
+      const ms = Math.round(performance.now() - t0);
+      row('YouTube videos', !!(r.ok && data.video), r.ok && data.video ? `plays in the browser · ${ms} ms` : (data.error || 'no playable video'));
+    } catch (e) { row('YouTube videos', false, e.message); }
+  }
   const client = new BareMux.BareClient(BASE + 'baremux/worker.js');
   const blocked = (t, r) => r.status === 403 || r.status === 429 || /Just a moment|cf-chl|blocked by network security|Access Denied/i.test(t);
   const tests = [
     ['Google', 'https://www.google.com/'], ['Wikipedia', 'https://en.wikipedia.org/wiki/Main_Page'],
-    ['YouTube videos', 'https://www.youtube.com/watch?v=jNQXAC9IVRw', t => /"status":"LOGIN_REQUIRED"/.test(t) ? 'YouTube asked this server to confirm it is not a bot' : ''],
     ['Discord', 'https://discord.com/'], ['Twitch', 'https://www.twitch.tv/'], ['Poki', 'https://poki.com/'], ['GitHub', 'https://github.com/'],
     ['Reddit', 'https://www.reddit.com/'], ['TikTok', 'https://www.tiktok.com/'], ['Crunchyroll', 'https://www.crunchyroll.com/'],
   ];

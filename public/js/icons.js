@@ -42,6 +42,7 @@ const GLYPHS = {
   grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
   eraser: '<path d="M8 20h12M5.5 15.5l9-9a2 2 0 0 1 2.8 0l1.7 1.7a2 2 0 0 1 0 2.8L12 18H8z"/>',
   download: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>', open: '<path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v1.3"/><path d="M3 18l2.5-7h16L19 18z"/>',
+  image: '<rect x="3" y="4.5" width="18" height="15" rx="2"/><circle cx="8.5" cy="9.5" r="1.4"/><path d="M21 15.5l-4.5-4.2L7 19.5"/>',
 };
 const glyph = (name, size = 16) => `<svg class="gl" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${GLYPHS[name] || GLYPHS.web}</svg>`;
 
