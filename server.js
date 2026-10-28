@@ -1,29 +1,38 @@
-// HitBoy Web-OS server: serves the OS from public/, runs a Wisp server so the proxy browser works out of the box,
-// and a party server (party.js) for live chat, streams and multiplayer games.
-// Use this on hosts with WebSocket support (Render, Railway, Fly.io, a VPS…). Vercel serves public/ statically
-// (see vercel.json) and the proxy falls back to a public Wisp server there.
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { handleParty, listRooms } from './party.js';
+import { sendImage } from './lib/generate.js';
 
 const app = express();
-// Ubuntu 24.04 (container2wasm) needs SharedArrayBuffer, i.e. a cross-origin isolated page.
 app.use('/vm/ubuntu24', (req, res, next) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
   res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
   next();
 });
-// Public streams and game rooms (for the Live app and game lobbies).
-app.get('/party/rooms', (req, res) => { res.set({ 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' }); res.json(listRooms(String(req.query.app || ''))); });
+const rooms = (req, res) => {
+  res.set({ 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+  res.json(listRooms(String(req.query.app || '')));
+};
+app.get('/party/rooms', rooms);
+app.get('/api/party', (req, res) => {
+  if ('list' in req.query || 'app' in req.query) return rooms(req, res);
+  res.json({ ok: true });
+});
+app.get('/api/wisp', (req, res) => res.json({ ok: true }));
+app.get('/api/generate', (req, res) => sendImage(req, res));
 app.use(express.static(fileURLToPath(new URL('./public', import.meta.url)), { extensions: ['html'] }));
 
 const server = createServer(app);
 server.on('upgrade', (req, socket, head) => {
-  if (req.url.endsWith('/wisp/')) wisp.routeRequest(req, socket, head);
-  else if (req.url.startsWith('/party/')) handleParty(req, socket, head); // live chat, streams, multiplayer
-  else socket.end();
+  const path = (req.url || '').split('?')[0];
+  if (path.includes('wisp')) {
+    if (!path.endsWith('/')) req.url = path + '/' + ((req.url || '').includes('?') ? '?' + req.url.split('?').slice(1).join('?') : '');
+    wisp.routeRequest(req, socket, head);
+  }
+  else if (path.includes('party')) handleParty(req, socket, head);
+  else socket.destroy();
 });
 
 const port = +process.env.PORT || 8080;

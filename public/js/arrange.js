@@ -3,7 +3,7 @@
 //  - drag apps along the dock or taskbar to reorder them
 //  - drag an app from the app grid, Start menu or dock onto the desktop to add a shortcut, or onto the dock to pin it
 const CELL = { w: 92, h: 104, x: 8, y: 10 };
-const BASE_DESKTOP = ['browser', 'games', 'vm', 'linux', 'store', 'files', 'terminal'];
+const BASE_DESKTOP = ['browser', 'games', 'vm', 'linux', 'image', 'video', 'store', 'files', 'terminal'];
 
 OS.desktopApps = function () {
   const removed = this.cfg.desktopRemoved || [];

@@ -1,9 +1,9 @@
 // Linux: a real x86 Linux (Buildroot, kernel 6.8) running in the v86 emulator, shown in an xterm.js terminal.
-// Networking goes through the same Wisp server as the proxy; your HitBoy Web-OS Home folder is shared at /mnt (9p).
+// Networking goes through this site's server, the same one the proxy uses. Your Home folder is shared at /mnt (9p).
 const XTERM = 'https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/';
 const LINUX_IMAGE = { url: BASE + 'v86/buildroot-bzimage68.bin', size: 10068480, async: false };
 
-// ws(s)://host/wisp/ → wisp(s)://host/wisp/ (the scheme v86 expects for a Wisp relay)
+// ws(s)://host/api/wisp/ → wisp(s)://host/api/wisp/ (the scheme v86 expects for a Wisp relay)
 const wispRelay = () => WebProxy.wispUrl().replace(/^ws(s?):/, 'wisp$1:');
 
 function LinuxApp(body, win) {
@@ -41,7 +41,7 @@ function LinuxApp(body, win) {
         out = (out + String.fromCharCode(b)).slice(-200);
         if (/[#$%] $/.test(out)) { // first shell prompt: bring up the network and go to the shared folder
           booted = true;
-          status(relay ? 'Running · online via ' + new URL(WebProxy.wispUrl()).host : 'Running · offline (no proxy server)', true);
+          status(relay ? 'Running · online' : 'Running · offline', true);
           $l('.lx-sync').disabled = false;
           emu.serial0_send((relay ? '(udhcpc -q >/dev/null 2>&1 &); ' : '') + 'cd /mnt; clear; echo "HitBoy Web-OS Linux - your Home folder is shared at /mnt. Try: ls, uname -a, vi, wget"\n');
         }

@@ -1,16 +1,12 @@
 // Live: chat rooms and screen/camera streaming between people on this HitBoy Web-OS server (party.js).
 // Streams are peer-to-peer WebRTC; the party server only relays the connection setup.
 const Party = {
-  // The party server: this site's own (Render, Railway, a VPS…) unless another one is set in Settings → Proxy.
   url(app, room, name) {
-    const custom = (OS.cfg.partyServer || '').trim().replace(/\/$/, '');
-    const base = custom || (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE.replace(/\/$/, '');
-    return `${base}/party/?app=${app}&room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    return `${proto}${location.host}${BASE}api/party?app=${app}&room=${encodeURIComponent(room)}&name=${encodeURIComponent(name)}`;
   },
-  // Public rooms (live streams, open game rooms) on the party server: [{ room, people, max, title, kind, name, started, state }]
   async rooms(app) {
-    const base = this.url(app, 'x', 'x').replace(/^ws/, 'http').replace(/\/party\/\?.*$/, '');
-    try { const r = await fetch(`${base}/party/rooms?app=${app}`, { cache: 'no-store' }); return r.ok ? await r.json() : []; } catch (e) { return null; }
+    try { const r = await fetch(`${location.origin}${BASE}api/party?list=1&app=${encodeURIComponent(app)}`, { cache: 'no-store' }); return r.ok ? await r.json() : []; } catch (e) { return null; }
   },
   // Opens a room. on: { welcome, join, leave, message(m), close(reason) }
   connect(app, room, name, on) {
@@ -29,7 +25,7 @@ const Party = {
     return conn;
   },
 };
-const NO_PARTY = "Can't reach the live server. Live chat and multiplayer need HitBoy Web-OS running on a server with WebSockets (Render, Railway, a VPS — see the README); static hosts like Vercel can't run it. You can point to another HitBoy server in Settings → Proxy.";
+const NO_PARTY = "Can't reach this site's server. Refresh and try again.";
 const RTC_CONFIG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }] };
 const timeOf = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 

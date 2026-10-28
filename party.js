@@ -1,5 +1,5 @@
 // Party server: WebSocket rooms for live chat, live streams and multiplayer games.
-// Clients connect to /party/?app=chat|game|live&room=NAME&name=NICK. Messages are JSON objects; the server adds
+// Clients connect to /api/party?app=chat|game|live&room=NAME&name=NICK. Messages are JSON objects; the server adds
 // `from` and relays them to everyone else in the room (or only to `to`). Nothing is stored on disk.
 // The room's owner (its longest-connected member) can publish a small `meta` object (title, game, …); rooms
 // with meta and `public: true` are listed by GET /party/rooms?app=… so people can find streams and games.
@@ -19,7 +19,8 @@ let nextId = 1;
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
 export function handleParty(req, socket, head) {
-  const u = new URL(req.url, 'http://x'), app = u.searchParams.get('app');
+  const raw = req.url && String(req.url).includes('?') ? req.url : (req.headers['x-forwarded-uri'] || req.headers['x-vercel-sc-url'] || req.url || '/');
+  const u = new URL(raw, 'http://x'), app = u.searchParams.get('app');
   if (!LIMITS[app]) return socket.destroy();
   wss.handleUpgrade(req, socket, head, ws => join(ws, app, clean(u.searchParams.get('room'), 32).toLowerCase() || 'lobby', clean(u.searchParams.get('name'), 24) || 'Guest'));
 }

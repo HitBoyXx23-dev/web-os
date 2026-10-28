@@ -13,17 +13,13 @@ const WebProxy = {
   engineFor(url) { const e = this.engine(); return e !== 'hitboy' ? e : this.siteEngines()[hostOf(url)] || 'scramjet'; },
   transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'hitboy'; },
   supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.$scramjetLoadController && self.__uv$config; },
-  // Public Wisp server used when this site has no Wisp endpoint of its own (static hosts like Vercel or GitHub Pages).
-  PUBLIC_WISP: 'wss://wisp.mercurywork.shop/',
   _auto: null,
-  ownWisp() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE + 'wisp/'; },
-  wispUrl() { return this._auto || this.relays()[0] || this.ownWisp(); },
-  // Relays from Settings (one or more, separated by spaces, commas or new lines); the first that answers is used.
-  relays() { return (OS.cfg.wisp || '').split(/[\s,]+/).map(s => s.trim()).filter(s => /^wss?:\/\//.test(s)); },
+  ownWisp() { return (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + BASE + 'api/wisp/'; },
+  wispUrl() { return this._auto || this.ownWisp(); },
+  relays() { return [this.ownWisp()]; },
   async pickRelay() {
-    const list = this.relays().length ? this.relays() : [this.ownWisp(), this.PUBLIC_WISP];
-    for (const u of list) if (await this.probe(u)) return u;
-    return list[0];
+    await this.probe(this.ownWisp());
+    return this.ownWisp();
   },
   // Resolves true if a WebSocket to url opens within ms.
   probe(url, ms = 3000) {
@@ -171,7 +167,7 @@ function BrowserApp(body, win, opts = {}) {
       catch (e) {
         loading(false);
         t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
-          <p class="muted">Set a Wisp server in Settings → Proxy, or turn the proxy off. Many sites refuse to load without it.</p>
+          <p class="muted">This site's server didn't answer. Refresh, or turn the proxy off and load the page directly.</p>
           <div class="row"><button class="primary" data-act="settings">Open proxy settings</button><button data-act="direct">Load directly</button></div></div>`;
         t.el.querySelector('[data-act=settings]').onclick = () => OS.launch('settings', 'proxy');
         t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url); };
@@ -264,19 +260,19 @@ const STORE = [
 const storeIcon = s => s.icon || (s.img ? realIcon(s.img) : s.fav ? favIcon(s.url) : { mono: s.mono, bg: s.bg });
 const storeApp = s => ({ name: s.name, icon: storeIcon(s), cat: 'Installed', w: 1000, h: 680, run: (b, w) => BrowserApp(b, w, { url: s.url, single: true, title: s.name }) });
 
-// Settings → Proxy → Test: checks each relay, then loads a few well-known sites through the proxy and explains failures.
+// Settings → Proxy → Test: checks this site's server, then loads a few well-known sites through the proxy and explains failures.
 async function proxyTest(out) {
   const row = (name, ok, note) => out.insertAdjacentHTML('beforeend', `<div class="pt-row"><span class="dot ${ok === null ? '' : ok ? 'ok' : 'bad'}"></span><b>${esc(name)}</b><span class="muted small">${esc(note)}</span></div>`);
   out.innerHTML = '';
-  const list = WebProxy.relays().length ? WebProxy.relays() : [WebProxy.ownWisp(), WebProxy.PUBLIC_WISP];
-  for (const u of list) { const t0 = performance.now(), ok = await WebProxy.probe(u, 4000); row('Relay ' + new URL(u).host, ok, ok ? `connected in ${Math.round(performance.now() - t0)} ms` : 'no answer'); }
+  const u = WebProxy.ownWisp();
+  { const t0 = performance.now(), ok = await WebProxy.probe(u, 4000); row('This site', ok, ok ? `connected in ${Math.round(performance.now() - t0)} ms` : 'no answer'); }
   try { await WebProxy.ready(); await WebProxy.setTransport(); } catch (e) { return row('Proxy', false, e.message); }
-  row('Using relay', null, new URL(WebProxy.wispUrl()).host + (WebProxy.wispUrl() === WebProxy.PUBLIC_WISP ? ' (free shared relay — many big sites block it)' : ''));
+  row('Server', null, location.host);
   const client = new BareMux.BareClient(BASE + 'baremux/worker.js');
   const blocked = (t, r) => r.status === 403 || r.status === 429 || /Just a moment|cf-chl|blocked by network security|Access Denied/i.test(t);
   const tests = [
     ['Google', 'https://www.google.com/'], ['Wikipedia', 'https://en.wikipedia.org/wiki/Main_Page'],
-    ['YouTube videos', 'https://www.youtube.com/watch?v=jNQXAC9IVRw', t => /"status":"LOGIN_REQUIRED"/.test(t) ? 'YouTube asks this relay to "confirm you\'re not a bot" — videos need a home relay or a signed-in account' : ''],
+    ['YouTube videos', 'https://www.youtube.com/watch?v=jNQXAC9IVRw', t => /"status":"LOGIN_REQUIRED"/.test(t) ? 'YouTube asked this server to confirm it is not a bot' : ''],
     ['Discord', 'https://discord.com/'], ['Twitch', 'https://www.twitch.tv/'], ['Poki', 'https://poki.com/'], ['GitHub', 'https://github.com/'],
     ['Reddit', 'https://www.reddit.com/'], ['TikTok', 'https://www.tiktok.com/'], ['Crunchyroll', 'https://www.crunchyroll.com/'],
   ];
@@ -286,8 +282,8 @@ async function proxyTest(out) {
       const r = await Promise.race([client.fetch(url), new Promise((_, no) => setTimeout(() => no(new Error('timed out')), 15000))]);
       const text = await r.text(), ms = Math.round(performance.now() - t0), extra = check?.(text, r);
       if (extra) row(name, false, extra);
-      else if (blocked(text, r)) row(name, false, `the site blocks or bot-checks this relay (HTTP ${r.status}) — try a home relay`);
+      else if (blocked(text, r)) row(name, false, `the site blocked this server (HTTP ${r.status})`);
       else row(name, r.status < 400, `HTTP ${r.status} · ${ms} ms`);
-    } catch (e) { row(name, false, /handshake|eof|reset|closed/i.test(e.message) ? 'connection refused by the site or relay — try another relay' : e.message.slice(0, 120)); }
+    } catch (e) { row(name, false, /handshake|eof|reset|closed/i.test(e.message) ? 'the site or this server closed the connection' : e.message.slice(0, 120)); }
   }
 }

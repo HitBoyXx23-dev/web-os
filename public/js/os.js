@@ -17,7 +17,14 @@ const fmtTime = d => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digi
 
 const OS = {
   user: 'user', account: null, cfg: {}, notes: [], afterLogin: null,
-  load() { try { this.cfg = JSON.parse(localStorage.getItem('novaos.cfg')) || {}; } catch (e) {} this.apply(); },
+  load() {
+    try { this.cfg = JSON.parse(localStorage.getItem('novaos.cfg')) || {}; } catch (e) { this.cfg = {}; }
+    if (this.cfg.wisp || this.cfg.partyServer) {
+      delete this.cfg.wisp; delete this.cfg.partyServer;
+      try { localStorage.setItem('novaos.cfg', JSON.stringify(this.cfg)); } catch (e) {}
+    }
+    this.apply();
+  },
   set(p) { Object.assign(this.cfg, p); try { localStorage.setItem('novaos.cfg', JSON.stringify(this.cfg)); } catch (e) {} this.apply(); },
   apply() {
     const t = typeof Shell !== 'undefined' ? Shell.theme() : null;
@@ -88,16 +95,7 @@ const OS = {
   },
 
   enterDesktop(unlocking) {
-    if (/[#&]live=/.test(location.hash)) setTimeout(() => this.launch('live'), 300); // shared stream link
-    if (this.pendingRelay) {
-      const r = this.pendingRelay; this.pendingRelay = null;
-      setTimeout(async () => {
-        if (!confirm(`Connect HitBoy Web-OS to the relay at ${new URL(r.replace(/^ws/, 'http')).host}?\n\nWebsites you open through the proxy, Live Chat and multiplayer will go through it. Only accept if you started it yourself (npm run home).`)) return;
-        this.set({ wisp: r + '/wisp/', partyServer: r });
-        try { await WebProxy.ready(); await WebProxy.setTransport(); } catch (e) {}
-        this.toast('Connected to your relay'); this.updateProxyDot();
-      }, 600);
-    }
+    if (/[#&]live=/.test(location.hash)) setTimeout(() => this.launch('live'), 300);
     $('#desktop').classList.remove('hidden');
     Shell.apply();
     if (Shell.current().cli) { if (unlocking && Shell.cliActive()) $('#cli input')?.focus(); else Shell.showCli(); } else this.set({ lastGui: this.cfg.shell || 'hitboy' });
@@ -280,7 +278,7 @@ const OS = {
       this.renderQuick(); this.updateProxyDot();
     };
     q.querySelector('[data-q=brightness]').oninput = e => this.set({ brightness: +e.target.value });
-    this.proxyStatus().then(([ok, msg]) => { const s = $('#qs-px'); if (s) s.textContent = ok ? new URL(WebProxy.wispUrl()).host : c.proxy === false ? 'Off' : 'Unavailable'; });
+    this.proxyStatus().then(([ok]) => { const s = $('#qs-px'); if (s) s.textContent = ok ? 'This site' : c.proxy === false ? 'Off' : 'Unavailable'; });
   },
   renderCalendar(offset = 0) {
     const now = new Date(), m = new Date(now.getFullYear(), now.getMonth() + offset, 1);
@@ -300,7 +298,7 @@ const OS = {
   },
   async proxyStatus() {
     if (this.cfg.proxy === false) return [false, 'Proxy off — sites load directly'];
-    try { await WebProxy.ready(); return [true, 'HitBoy Proxy connected via ' + new URL(WebProxy.wispUrl()).host]; } catch (e) { return [false, e.message]; }
+    try { await WebProxy.ready(); return [true, 'HitBoy Proxy is connected to this site']; } catch (e) { return [false, e.message]; }
   },
   updateProxyDot() { this.proxyStatus().then(([ok]) => { const d = $('#px-dot'); if (d) d.className = 'dot ' + (ok ? 'ok' : 'bad'); }); },
 
@@ -315,8 +313,7 @@ const OS = {
 };
 
 OS.load();
-// One-click relay setup: <site>/#relay=wss://… (printed by `npm run home`). Asks before switching.
-{ const m = location.hash.match(/relay=([^&]+)/); if (m) { const r = decodeURIComponent(m[1]).replace(/\/+$/, ''); if (/^wss?:\/\/[^/\s]+$/.test(r)) OS.pendingRelay = r; history.replaceState(null, '', location.pathname + location.search); } }
+if (/relay=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
 // HitBoy's own sites come installed (once, so uninstalling them sticks).
 if (!OS.cfg.hitboySites) OS.set({ installed: [...new Set([...(OS.cfg.installed || []), ...HITBOY_SITES.map(x => x.id)])], hitboySites: 1 });
 OS.syncApps(); OS.initDesktop();

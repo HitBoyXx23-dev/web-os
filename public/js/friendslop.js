@@ -383,7 +383,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
       <div class="section-label" style="padding:4px 0 0">Open rooms</div><div class="ss-rooms"><div class="spinner"></div></div></div>`;
     Party.rooms('game').then(list => {
       const box = ui.querySelector('.ss-rooms'); if (!box) return;
-      if (list === null) { box.innerHTML = '<p class="muted small">Online play needs the HitBoy server (see Settings → Proxy → Live server).</p>'; return; }
+      if (list === null) { box.innerHTML = '<p class="muted small">Online play needs this site\'s server. Refresh and try again.</p>'; return; }
       const rooms = list.filter(r => r.kind === 'scrapshift');
       box.innerHTML = rooms.length ? rooms.map(r => `<button class="dd-room" data-room="${esc(r.room)}"><b>${esc(r.title)}</b><small>${r.people}/${r.max} · ${esc(r.state || '')}</small></button>`).join('') : '<p class="muted small">No open rooms — create one!</p>';
     });

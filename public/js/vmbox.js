@@ -124,7 +124,7 @@ function VMWindow(body, win, vm) {
       <button class="ghost small danger" data-a="off">${glyph('power', 14)}Power Off</button></div>
     <iframe class="vm-screen" src="vm/run.html" allow="fullscreen; pointer-lock"></iframe>
     <div class="vm-status"><span class="dot" id="vm-led"></span><span class="vm-st">Starting…</span><span class="grow"></span>
-      <span>${(t.fixedMemory ? t.memory : vm.memory)} MB</span><span>${vm.network === false || t.net === 'none' ? 'No network' : 'Network: NAT (Wisp)'}</span><span class="vm-hint">Click the screen to type · Esc releases the mouse</span></div></div>`;
+      <span>${(t.fixedMemory ? t.memory : vm.memory)} MB</span><span>${vm.network === false || t.net === 'none' ? 'No network' : 'Network: NAT'}</span><span class="vm-hint">Click the screen to type · Esc releases the mouse</span></div></div>`;
   const f = body.querySelector('iframe'), st = s => body.querySelector('.vm-st').textContent = s, led = body.querySelector('#vm-led');
   let emu = null, paused = false, ledT;
   f.onload = async () => {
@@ -189,7 +189,7 @@ APPS.vm = ALL_APPS.vm = { name: 'VMBox', icon: realIcon('virtualbox'), cat: 'Sys
           ${sec('System', [['Base Memory', t.external ? 'Managed by the emulator' : `${t.fixedMemory ? t.memory : vm.memory} MB`], ['Processor', t.external ? 'x86-64 (Bochs)' : 'x86 (v86)']])}
           ${sec('Display', [['Video Memory', t.external ? 'Terminal' : `${vm.vram || t.vram || 8} MB`]])}
           ${sec('Storage', [['Controller', esc(storage)]])}
-          ${sec('Network', [['Adapter 1', t.external || vm.network === false ? 'Not attached' : `${t.net === 'virtio' ? 'Virtio-net' : 'NE2000'} (NAT via Wisp)`]])}
+          ${sec('Network', [['Adapter 1', t.external || vm.network === false ? 'Not attached' : `${t.net === 'virtio' ? 'Virtio-net' : 'NE2000'} (NAT)`]])}
           ${sec('Saved State', [['State', running ? 'Running' : hasState ? `Saved ${new Date(vm.savedAt || Date.now()).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })} · ${fmtMB(FS.size(statePath(vm)))}` : 'None']])}
         </div>
         <div class="row" style="padding:0 20px 20px"><button class="danger" data-a="delete">${glyph('trash', 14)}Remove…</button></div>`
@@ -222,7 +222,7 @@ APPS.vm = ALL_APPS.vm = { name: 'VMBox', icon: realIcon('virtualbox'), cat: 'Sys
         ${t.external ? '' : `
         <label class="field">Base Memory <span class="muted">${t.fixedMemory ? `(fixed at ${t.memory} MB by its snapshot)` : ''}</span>
           <div class="row"><input type="range" name="memory" min="16" max="2048" step="16" value="${edit?.memory || t.memory}" ${t.fixedMemory ? 'disabled' : ''} class="grow"><b class="mem-v">${edit?.memory || t.memory} MB</b></div></label>
-        <label class="row small"><input type="checkbox" name="network" ${edit?.network === false ? '' : 'checked'} ${t.net === 'none' ? 'disabled' : ''}> Enable network (NAT through the proxy server)</label>`}
+        <label class="row small"><input type="checkbox" name="network" ${edit?.network === false ? '' : 'checked'} ${t.net === 'none' ? 'disabled' : ''}> Enable network</label>`}
         ${tid === 'custom' ? `<div class="field">Boot image
           <div class="seg"><button type="button" data-k="file" class="${src.kind !== 'url' ? 'on' : ''}">From Files</button><button type="button" data-k="url" class="${src.kind === 'url' ? 'on' : ''}">From URL</button></div>
           <div class="row k-file ${src.kind === 'url' ? 'hidden' : ''}"><input name="path" class="grow" placeholder="/VMs/my.iso" value="${esc(src.path || '')}"><button type="button" data-a="pick">Choose…</button><button type="button" data-a="upload">Upload…</button><input type="file" hidden accept=".iso,.img,.ima,.flp,.vfd,.bin"></div>

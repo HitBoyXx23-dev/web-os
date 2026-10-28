@@ -7,11 +7,11 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v14';
+const CACHE = 'novaos-v15';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
-  ...['icons', 'fs', 'wm', 'games', 'dos', 'browser', 'apps', 'vmbox', 'fatimg', 'runners', 'catalog', 'catalog-data', 'chat', 'ai', 'code', 'friendslop', 'live', 'doodle', 'games2', 'games3d', 'linux', 'users', 'setup', 'shells', 'os', 'arrange'].map(f => `js/${f}.js`),
+  ...['icons', 'fs', 'wm', 'games', 'dos', 'browser', 'apps', 'vmbox', 'fatimg', 'runners', 'catalog', 'catalog-data', 'chat', 'ai', 'generate', 'code', 'friendslop', 'live', 'doodle', 'games2', 'games3d', 'linux', 'users', 'setup', 'shells', 'os', 'arrange'].map(f => `js/${f}.js`),
   'scram/scramjet.all.js', 'uv/uv.bundle.js', 'uv/uv.config.js', 'baremux/index.js'].map(p => BASE + p);
 
 self.addEventListener('install', e => {
@@ -88,7 +88,8 @@ self.addEventListener('fetch', event => {
     if (scramjet.route(event)) return scramjet.fetch(event);
     if (uv.route(event)) return uv.fetch(event);
     const url = new URL(event.request.url);
-    if (url.pathname.startsWith(ISOLATED) && url.pathname.includes('/image/')) return isolate(event.request, await fetch(event.request)); // big, don't cache twice
+    if (url.pathname.startsWith(BASE + 'api/')) return fetch(event.request);
+    if (url.pathname.startsWith(ISOLATED) && url.pathname.includes('/image/')) return isolate(event.request, await fetch(event.request));
     if (event.request.method === 'GET' && url.origin === location.origin && !url.pathname.endsWith('/wisp/')) return isolate(event.request, await shell(event.request));
     return fetch(event.request);
   })());
