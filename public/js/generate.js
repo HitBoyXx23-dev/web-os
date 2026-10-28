@@ -21,19 +21,33 @@ async function fetchPicture(src, signal, body) {
 }
 
 async function fetchMoss(prompt, size, signal) {
-  const start = await fetch(BASE + 'api/generate', {
-    method: 'POST', signal, headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ prompt, style: 'moss', width: size[0], height: size[1] }),
-  });
-  const started = await start.json().catch(() => ({}));
-  if ((!start.ok && start.status !== 202) || !started.id) throw new Error(started.error || 'MOSS did not take the picture. Try again.');
+  let started = {}, start = null, last = 'MOSS did not take the picture. Try again.';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    start = await fetch(BASE + 'api/generate', {
+      method: 'POST', signal, headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt, style: 'moss', width: size[0], height: size[1] }),
+    });
+    started = await start.json().catch(() => ({}));
+    if ((start.ok || start.status === 202) && started.id) break;
+    last = started.error || last;
+    if (start.status === 400) throw new Error(last);
+    if (attempt === 0 && /per 1 minute|too many/i.test(last)) {
+      await new Promise((resolve, reject) => {
+        if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
+        const t = setTimeout(resolve, 15000);
+        signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
+      });
+    }
+  }
+  if (!started.id) throw new Error(last);
   const stop = () => fetch(BASE + 'api/generate?style=moss&id=' + encodeURIComponent(started.id), { method: 'DELETE' }).catch(() => {});
   if (signal) signal.addEventListener('abort', stop, { once: true });
   const t0 = performance.now();
-  while (performance.now() - t0 < 12 * 60 * 1000) {
+  let misses = 0;
+  while (performance.now() - t0 < 20 * 60 * 1000) {
     await new Promise((resolve, reject) => {
       if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'));
-      const t = setTimeout(resolve, 3000);
+      const t = setTimeout(resolve, 12000);
       signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')); }, { once: true });
     });
     const res = await fetch(BASE + 'api/generate?style=moss&id=' + encodeURIComponent(started.id), { signal });
@@ -45,7 +59,11 @@ async function fetchMoss(prompt, size, signal) {
       catch (e) { throw new Error('A frame failed. Try again.'); }
     }
     const data = await res.json().catch(() => ({}));
-    if (!res.ok && res.status !== 202) throw new Error(data.error || 'MOSS did not return a picture. Try again.');
+    if (!res.ok && res.status !== 202) {
+      if (++misses < 4) continue;
+      throw new Error(data.error || 'MOSS did not return a picture. Try again.');
+    }
+    misses = 0;
   }
   stop();
   throw new Error('MOSS is busy. Try again in a moment.');
