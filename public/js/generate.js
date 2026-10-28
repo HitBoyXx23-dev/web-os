@@ -1,5 +1,5 @@
 const GEN_SIZES = { square: [768, 768], wide: [768, 432], tall: [432, 768] };
-const GEN_STYLES = [['photo', 'Photo'], ['illustration', 'Illustration'], ['poster', 'Poster'], ['pixel', 'Pixel']];
+const GEN_STYLES = [['photo', 'Photo'], ['illustration', 'Illustration'], ['poster', 'Poster'], ['pixel', 'Pixel'], ['uncensored', 'Uncensored'], ['uncensored-anime', 'Uncensored anime']];
 const GEN_IMAGE_IDEAS = ['A red fox in fresh snow at dusk', 'A tiny bookstore on a rainy street', 'An astronaut planting a garden on the moon', 'A glass lighthouse above a calm sea'];
 const GEN_VIDEO_IDEAS = ['A paper boat drifting down a river', 'A fox running through a snowy forest', 'Clouds racing over a mountain lake', 'A lantern floating up into the night'];
 const genSrc = (prompt, opts) => {

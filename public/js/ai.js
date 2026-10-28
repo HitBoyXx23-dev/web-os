@@ -14,6 +14,8 @@ const MEDIA_MODELS = [
   ['illustration', 'Illustration', 'Clean shapes, soft color'],
   ['poster', 'Poster', 'Bold graphic composition'],
   ['pixel', 'Pixel', 'Crisp pixel art'],
+  ['uncensored', 'Uncensored', 'Photo, safety filter off'],
+  ['uncensored-anime', 'Uncensored anime', 'Anime, safety filter off'],
 ];
 const AI_PROVIDERS = [['local', 'On this device'], ['claude', 'Claude'], ['image', 'Image'], ['video', 'Video']];
 const AI_SYSTEM = 'You are the assistant built into HitBoy Web-OS, a desktop that runs in a web browser. Be helpful, friendly and concise. Use Markdown for code.';
