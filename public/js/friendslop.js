@@ -404,7 +404,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     solo = false; peers.clear();
     conn = Party.connect('game', 'ss-' + code.toLowerCase(), me.name, {
       welcome: (m, info) => {
-        myId = m.id; conn.pub = pub; peers.clear(); m.peers.forEach(p => peers.set(p.id, { id: p.id, name: p.name })); pickHost();
+        myId = m.id; if (m.name) me.name = m.name; conn.pub = pub; peers.clear(); m.peers.forEach(p => peers.set(p.id, { id: p.id, name: p.name })); pickHost();
         if (!info?.again) room(code); else drawRoom();
         announce(W ? 'playing' : 'waiting'); send({ t: 'p', x: 0, y: 0, a: 0, fl: true, dead: false, e: 0, c: me.color, n: me.name });
       },

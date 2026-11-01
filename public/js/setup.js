@@ -21,7 +21,7 @@ const Setup = {
     const views = {
       welcome: () => `<div class="su-hero"><div class="su-mark"></div><h1>Welcome to HitBoy Web-OS</h1>
         <p>Let's set up your computer. It takes about a minute, and you can change everything later in Settings.</p>
-        <ul class="su-feats">${[['vm', 'Windows, macOS and Linux desktops — or just a command line'], ['games', '115+ games, Doom and classic consoles'], ['browser', 'A proxy browser for YouTube, Discord and more'], ['terminal', 'Virtual machines: Ubuntu, Arch Linux, Windows 98']].map(([g, t]) => `<li>${tile(g, 30)}<span>${t}</span></li>`).join('')}</ul></div>`,
+        <ul class="su-feats">${[['vm', 'Windows, macOS and Linux desktops — or just a command line'], ['games', '10,000+ games, Doom and classic consoles'], ['browser', 'A proxy browser for YouTube, Discord and more'], ['terminal', 'Virtual machines: Ubuntu, Arch Linux, Windows 98']].map(([g, t]) => `<li>${tile(g, 30)}<span>${t}</span></li>`).join('')}</ul></div>`,
       desktop: () => `<h2>Choose your desktop</h2><p class="su-sub">How HitBoy Web-OS looks and works. The command line is text only — no windows, mouse or desktop.</p>
         <div class="style-grid su-styles">${Object.entries(SHELL_PRESETS).map(([id, p]) => `<button class="style-card ${st.shell === id ? 'on' : ''}" data-shell="${id}">${shellPreview(p)}<b>${esc(p.name)}</b><small>${p.family}${id === 'hitboy' ? ' · recommended' : ''}</small></button>`).join('')}
           <button class="style-card ${st.shell === 'custom' ? 'on' : ''}" data-shell="custom">${shellPreview({ ...st.custom, cli: false })}<b>Hybrid</b><small>Mix and match</small></button></div>

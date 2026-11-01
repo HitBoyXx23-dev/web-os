@@ -1,10 +1,12 @@
 // Live: chat rooms and screen/camera streaming between people on this HitBoy Web-OS server (party.js).
 // Streams are peer-to-peer WebRTC; the party server only relays the connection setup.
 const Party = {
-  url(app, room, name) {
+  // The name shown in chat, Live and games: a nickname chosen here, else the account's name. Rooms keep names unique.
+  nick() { return (localStorage.getItem('novaos.nick') || OS.account?.name || OS.user || 'Guest').slice(0, 24); },
+  url(app, room, name, cid) {
     const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
     const bit = s => encodeURIComponent(String(s || '').replace(/\//g, '')).replace(/%2F/gi, '');
-    return `${proto}${location.host}${BASE}api/party/${bit(app)}/${bit(room)}/${bit(name)}`;
+    return `${proto}${location.host}${BASE}api/party/${bit(app)}/${bit(room)}/${bit(name)}?cid=${cid}`;
   },
   async rooms(app) {
     try { const r = await fetch(`${location.origin}${BASE}api/party?list=1&app=${encodeURIComponent(app)}`, { cache: 'no-store' }); return r.ok ? await r.json() : []; } catch (e) { return null; }
@@ -12,19 +14,22 @@ const Party = {
   // Opens a room. on: { welcome, join, leave, message(m), close(reason) }
   connect(app, room, name, on) {
     let ws, opened = false, tries = 0, delay = 800, timer;
+    const cid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36).slice(-4); // lets the server replace this connection's own stale socket on reconnect
     const conn = {
       id: null,
+      name,
       get ws() { return ws; },
       send: m => ws && ws.readyState === 1 && ws.send(JSON.stringify(m)),
       close() { conn.closed = true; clearTimeout(timer); try { ws?.close(); } catch (e) {} },
     };
     const open = () => {
       if (conn.closed) return;
-      ws = new WebSocket(this.url(app, room, name));
+      ws = new WebSocket(this.url(app, room, conn.name, cid));
       ws.onopen = () => { opened = true; tries = 0; delay = 800; };
       ws.onmessage = e => {
         let m; try { m = JSON.parse(e.data); } catch (err) { return; }
-        if (m.t === 'welcome') { const again = !!conn._seen; conn.id = m.id; conn._seen = true; on.welcome?.(m, { again }); }
+        if (m.t === 'welcome') { const again = !!conn._seen; conn.id = m.id; conn._seen = true; if (m.name) conn.name = m.name; on.welcome?.(m, { again }); }
+        else if (m.t === 'rename' && m.id === conn.id) { conn.name = m.name; on.renamed?.(m.name); }
         else if (m.t === 'join') on.join?.(m.peer);
         else if (m.t === 'leave') on.leave?.(m.id);
         else if (m.t === 'full') { conn.closed = true; on.close?.('That room is full.'); }
@@ -47,13 +52,13 @@ const RTC_CONFIG = { iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun
 const timeOf = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 
 APPS.chat = ALL_APPS.chat = { name: 'Live Chat', icon: realIcon('discord'), cat: 'Apps', w: 940, h: 620, run(body, win) {
-  const me = OS.account?.name || OS.user;
+  let base = Party.nick(), me = base;
   let conn = null, room = localStorage.getItem('novaos.chatRoom') || 'general', peers = new Map(), msgs = [];
   const rooms = () => [...new Set(['general', 'games', 'movies', 'help', ...JSON.parse(localStorage.getItem('novaos.chatRooms') || '[]')])];
   // streaming state
   let myStream = null; const outPCs = new Map(), inPCs = new Map(), live = new Set(); // live = peer ids streaming
 
-  body.innerHTML = `<div class="chat"><aside><div class="chat-me">${avatar(OS.account, 30)}<div><b>${esc(me)}</b><small class="chat-status">Connecting…</small></div></div>
+  body.innerHTML = `<div class="chat"><aside><div class="chat-me">${avatar(OS.account, 30)}<div class="grow"><b>${esc(me)}</b><small class="chat-status">Connecting…</small></div><button class="icon-btn chat-nick" title="Change my chat name">${glyph('edit', 14)}</button></div>
       <div class="section-label">Rooms</div><nav class="chat-rooms"></nav>
       <div class="row chat-newroom"><input placeholder="New room" maxlength="32"><button class="icon-btn" title="Join room">${glyph('plus', 15)}</button></div>
       <div class="section-label">Online</div><div class="chat-people"></div></aside>
@@ -77,19 +82,21 @@ APPS.chat = ALL_APPS.chat = { name: 'Live Chat', icon: realIcon('discord'), cat:
     log.appendChild(d); if (stick) log.scrollTop = 1e9;
   };
   const status = t => { $c('.chat-status').textContent = t; };
+  // Several people can share one account; the server gives each person in a room their own name.
+  const setMe = name => { if (!name) return; if (name !== base && name !== me) line({ sys: `Someone else here already uses that name, so you appear as "${name}".` }); me = name; $c('.chat-me b').textContent = me; drawPeople(); };
 
   const connect = () => {
     stopLive(); conn?.close(); peers.clear(); live.clear(); log.innerHTML = ''; drawRooms(); status('Connecting…');
     localStorage.setItem('novaos.chatRoom', room);
-    conn = Party.connect('chat', room, me, {
+    conn = Party.connect('chat', room, base, {
       welcome: (m, info) => {
-        status('Online'); peers.clear(); m.peers.forEach(p => peers.set(p.id, p));
+        status('Online'); peers.clear(); m.peers.forEach(p => peers.set(p.id, p)); setMe(m.name);
         if (info?.again) line({ sys: 'Reconnected.' });
         else { m.history.forEach(line); line({ sys: `You joined #${room}. Be kind — messages are visible to everyone in this room.` }); }
         if (myStream) conn.send({ t: 'live', on: true });
         drawPeople();
       },
-      status,
+      status, renamed: setMe,
       join: p => { peers.set(p.id, p); line({ sys: `${p.name} joined` }); drawPeople(); if (myStream) conn.send({ t: 'live', on: true, to: p.id }); },
       leave: id => { const p = peers.get(id); peers.delete(id); live.delete(id); closePC(inPCs, id); closePC(outPCs, id); removeTile(id); if (p) line({ sys: `${p.name} left` }); drawPeople(); },
       message: m => {
@@ -163,6 +170,10 @@ APPS.chat = ALL_APPS.chat = { name: 'Live Chat', icon: realIcon('discord'), cat:
       const inp = $c('.chat-newroom input'), name = inp.value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 32); if (!name) return;
       localStorage.setItem('novaos.chatRooms', JSON.stringify([...new Set([...JSON.parse(localStorage.getItem('novaos.chatRooms') || '[]'), name])]));
       inp.value = ''; room = name; return connect();
+    }
+    if (e.target.closest('.chat-nick')) {
+      const n = (prompt('Your chat name (people on the same account can each pick their own)', me) || '').trim().slice(0, 24); if (!n || n === me) return;
+      try { localStorage.setItem('novaos.nick', n); } catch (err) {} base = n; return conn?.send({ t: 'name', name: n });
     }
     const w = e.target.closest('[data-watch]');
     if (w) { const id = +w.dataset.watch; if (id === conn.id) return; if (inPCs.has(id)) return; tile_(id, (peers.get(id)?.name || '') + ' — connecting…'); return conn.send({ t: 'watch', to: id }); }

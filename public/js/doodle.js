@@ -140,7 +140,7 @@ GAME_APPS.doodle = ALL_APPS.doodle = { name: 'Doodle Duel', icon: { mono: 'DD', 
     me.name = ($d('.dd-name')?.value.trim() || me.name).slice(0, 16); code = room.replace(/^dd-/, '');
     conn = Party.connect('game', room, me.name, {
       welcome: (m, info) => {
-        myId = m.id; owner = m.owner; peers.clear(); m.peers.forEach(p => peers.set(p.id, p));
+        myId = m.id; if (m.name) me.name = m.name; owner = m.owner; peers.clear(); m.peers.forEach(p => peers.set(p.id, p));
         if (info?.again) { if (isHost() && H) publish(); return render(); }
         if (isHost()) { H = { public: pub }; newGame(); }
         render();

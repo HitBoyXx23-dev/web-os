@@ -4,7 +4,7 @@
 const liveSince = t => { const m = Math.max(0, Math.floor((Date.now() - t) / 60000)); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`; };
 
 APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e11d48' }, cat: 'Apps', w: 1080, h: 680, run(body, win) {
-  const me = OS.account?.name || OS.user;
+  const me = Party.nick();
   let conn = null, view = null, refresh = null, stream = null, owner = null, meta = null, peers = new Map();
   const pcs = new Map(); // streamer: viewer id -> RTCPeerConnection; viewer: just the streamer's
   const $l = s => body.querySelector(s);
@@ -109,7 +109,7 @@ APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e
     const showMeta = () => { if (!meta) return; $l('.live-title').textContent = meta.title || 'Live'; $l('.live-who').textContent = meta.name; WM.setTitle(win, `${meta.name} — HitBoy Live`); };
     conn = Party.connect('live', room, me, {
       welcome: (m, info) => {
-        peers.clear(); m.peers.forEach(p => peers.set(p.id, p)); peers.set(m.id, { id: m.id, name: me }); owner = m.owner; meta = m.meta; viewers();
+        peers.clear(); m.peers.forEach(p => peers.set(p.id, p)); peers.set(m.id, { id: m.id, name: m.name || me }); owner = m.owner; meta = m.meta; viewers();
         if (!info?.again) m.history.forEach(line);
         if (!meta || owner === m.id) return ended();
         showMeta(); conn.send({ t: 'watch', to: owner });

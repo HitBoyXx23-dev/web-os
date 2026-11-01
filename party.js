@@ -27,6 +27,18 @@ function requestTarget(req) {
   return new URL(chosen, 'http://x');
 }
 
+// Many people can sign in to the same OS account, but a room never shows two people with the same name:
+// a second "Sam" becomes "Sam 2". `except` is the connection being named (so it never collides with itself).
+function uniqueName(room, wanted, except) {
+  const taken = new Set([...room.clients.values()].filter(c => c !== except).map(c => c.info.name.toLowerCase()));
+  const base = clean(wanted, 24) || 'Guest';
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) {
+    const suffix = ' ' + n, name = base.slice(0, 24 - suffix.length).trimEnd() + suffix;
+    if (!taken.has(name.toLowerCase())) return name;
+  }
+}
+
 export function handleParty(req, socket, head) {
   const u = requestTarget(req);
   const parts = u.pathname.split('/').filter(Boolean);
@@ -38,19 +50,22 @@ export function handleParty(req, socket, head) {
   try { if (!name && path[2]) name = decodeURIComponent(path[2]); } catch (e) {}
   const app = u.searchParams.get('app') || path[0];
   if (!LIMITS[app]) return socket.destroy();
-  wss.handleUpgrade(req, socket, head, ws => join(ws, app, clean(room, 32).toLowerCase() || 'lobby', clean(name, 24) || 'Guest'));
+  const cid = clean(u.searchParams.get('cid'), 32);
+  wss.handleUpgrade(req, socket, head, ws => join(ws, app, clean(room, 32).toLowerCase() || 'lobby', clean(name, 24) || 'Guest', cid));
 }
 
-function join(ws, app, roomName, name) {
+function join(ws, app, roomName, wanted, cid) {
   const key = app + ':' + roomName;
   if (!rooms.has(key)) rooms.set(key, { clients: new Map(), history: [] });
   const room = rooms.get(key);
+  // A reconnecting tab replaces its own stale connection instead of being renamed against it.
+  if (cid) for (const [oid, old] of [...room.clients]) if (old.cid === cid) { old.dropped = true; leave(app, key, room, oid); try { old.terminate(); } catch (e) {} }
   if (room.clients.size >= MAX_ROOM[app]) { ws.send(JSON.stringify({ t: 'full' })); return ws.close(); }
-  const id = nextId++; ws.info = { id, name, joined: Date.now() };
-  const send = (c, m) => { if (c.readyState === 1) c.send(typeof m === 'string' ? m : JSON.stringify(m)); };
+  const id = nextId++; ws.cid = cid; ws.info = { id, name: uniqueName(room, wanted, null), joined: Date.now() };
+  const send =  (c, m) => { if (c.readyState === 1) c.send(typeof m === 'string' ? m : JSON.stringify(m)); };
   const others = m => { for (const c of room.clients.values()) if (c !== ws) send(c, m); };
   if (!room.clients.size) { room.owner = id; room.meta = null; }
-  send(ws, { t: 'welcome', id, room: roomName, owner: room.owner, meta: room.meta, peers: [...room.clients.values()].map(c => c.info), history: room.history });
+  send(ws, { t: 'welcome', id, name: ws.info.name, room: roomName, owner: room.owner, meta: room.meta, peers: [...room.clients.values()].map(c => c.info), history: room.history });
   room.clients.set(id, ws); others({ t: 'join', peer: ws.info });
 
   let count = 0; const reset = setInterval(() => { count = 0; }, 10000);
@@ -61,10 +76,13 @@ function join(ws, app, roomName, name) {
     m.from = id;
     if (m.t === 'meta') { // only the owner describes the room
       if (id !== room.owner || !m.meta || typeof m.meta !== 'object') return;
-      const x = m.meta; room.meta = { title: clean(x.title, 80), kind: clean(x.kind, 24), name: clean(x.name || ws.info.name, 24), public: !!x.public, started: room.meta?.started || Date.now(), state: clean(x.state, 24) };
+      const x = m.meta; room.meta = { title: clean(x.title, 80), kind: clean(x.kind, 24), name: ws.info.name, public: !!x.public, started: room.meta?.started || Date.now(), state: clean(x.state, 24) };
       return others({ t: 'meta', meta: room.meta });
     }
-    if (m.t === 'name') { ws.info.name = clean(m.name, 24) || ws.info.name; return others({ t: 'rename', id, name: ws.info.name }); }
+    if (m.t === 'name') { // names stay unique within the room; the sender is told which one it got
+      ws.info.name = uniqueName(room, m.name || ws.info.name, ws); if (room.meta && id === room.owner) room.meta.name = ws.info.name;
+      send(ws, { t: 'rename', id, name: ws.info.name }); return others({ t: 'rename', id, name: ws.info.name });
+    }
     if (m.t === 'msg') { // chat text: short, rate-limited harder, kept in recent history
       const now = Date.now(); ws.recent = (ws.recent || []).filter(t => now - t < 10000);
       if (ws.recent.length >= 8) return send(ws, { t: 'slow' });
@@ -77,12 +95,17 @@ function join(ws, app, roomName, name) {
     const data = JSON.stringify(m);
     if (m.to) { const c = room.clients.get(m.to); if (c) send(c, data); } else others(data);
   });
-  ws.on('close', () => {
-    clearInterval(reset); room.clients.delete(id); others({ t: 'leave', id });
-    if (!room.clients.size) return rooms.delete(key);
-    if (room.owner === id) { room.owner = Math.min(...room.clients.keys()); if (app === 'live') room.meta = null; others({ t: 'owner', id: room.owner, meta: room.meta }); } // a stream ends with its streamer
-  });
+  ws.on('close', () => { clearInterval(reset); if (!ws.dropped) leave(app, key, room, id); });
   ws.on('error', () => {});
+}
+
+// Removes a connection; the room's owner role passes to the longest-connected member.
+function leave(app, key, room, id) {
+  if (!room.clients.delete(id)) return;
+  const others = m => { for (const c of room.clients.values()) if (c.readyState === 1) c.send(JSON.stringify(m)); };
+  others({ t: 'leave', id });
+  if (!room.clients.size) return rooms.delete(key);
+  if (room.owner === id) { room.owner = Math.min(...room.clients.keys()); if (app === 'live') room.meta = null; others({ t: 'owner', id: room.owner, meta: room.meta }); } // a stream ends with its streamer
 }
 
 // Public rooms for an app (streams that are live, game rooms that are open).
