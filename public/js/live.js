@@ -4,7 +4,7 @@
 const liveSince = t => { const m = Math.max(0, Math.floor((Date.now() - t) / 60000)); return m < 60 ? `${m}m` : `${Math.floor(m / 60)}h ${m % 60}m`; };
 
 APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e11d48' }, cat: 'Apps', w: 1080, h: 680, run(body, win) {
-  const me = Party.nick();
+  let me = Party.nick('live');
   let conn = null, view = null, refresh = null, stream = null, owner = null, meta = null, peers = new Map();
   const pcs = new Map(); // streamer: viewer id -> RTCPeerConnection; viewer: just the streamer's
   const $l = s => body.querySelector(s);
@@ -49,7 +49,8 @@ APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e
     stop(); view = 'setup';
     const hasScene = !!window.RecorderScene;
     body.innerHTML = `<div class="live"><header class="live-head"><button class="ghost small" data-a="back">${glyph('back', 14)}Back</button><b>Go live</b></header>
-      <div class="live-setup"><label class="field">Stream title<input class="ls-title" maxlength="80" value="${esc(me.split(' ')[0])} is live"></label>
+      <div class="live-setup"><label class="field">Name in this room<input class="ls-nick" maxlength="24" value="${esc(me)}" title="How viewers see you in chat — not your login username"></label>
+        <label class="field">Stream title<input class="ls-title" maxlength="80" value="${esc(me.split(' ')[0])} is live"></label>
         <div class="field">Source<div class="seg ls-src">${[['screen', 'Screen, window or tab'], ['cam', 'Camera'], ...(hasScene ? [['scene', 'Recorder scene']] : [])].map(([k, n], i) => `<button data-src="${k}" class="${i ? '' : 'on'}">${n}</button>`).join('')}</div></div>
         <label class="row small"><input type="checkbox" class="switch ls-mic" checked> Include my microphone</label>
         <label class="row small"><input type="checkbox" class="switch ls-public" checked> List my stream in HitBoy Live (otherwise share the link)</label>
@@ -57,6 +58,7 @@ APPS.live = ALL_APPS.live = { name: 'HitBoy Live', icon: { mono: 'Live', bg: '#e
         <div class="row"><button class="primary" data-a="start">${glyph('vm', 14)}Start streaming</button></div></div></div>`;
   };
   const start = async () => {
+    me = Party.saveNick('live', $l('.ls-nick')?.value.trim() || me) || me;
     const src = $l('.ls-src .on').dataset.src, title = $l('.ls-title').value.trim() || 'Live', mic = $l('.ls-mic').checked, pub = $l('.ls-public').checked;
     try {
       if (src === 'scene') stream = window.RecorderScene.stream();

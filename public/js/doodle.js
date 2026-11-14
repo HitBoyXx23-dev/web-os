@@ -22,7 +22,7 @@ const ddClose = (a, b) => { // one edit away
 };
 
 GAME_APPS.doodle = ALL_APPS.doodle = { name: 'Doodle Duel', icon: { mono: 'DD', bg: '#7c3aed' }, cat: 'Games', desc: 'Draw and guess with friends', w: 1060, h: 700, run(body, win) {
-  const me = { name: (OS.account?.name || OS.user).split(' ')[0] };
+  const me = { name: Party.nick('game').split(' ')[0] };
   let conn = null, myId = 0, owner = 0, code = '', peers = new Map(), S = null; // S: latest game state from the host
   let H = null; // host-only state
   const strokes = []; // current drawing: [{ c, w, p: [x0, y0, x1, y1, …] }] in 0..1000 × 0..750
@@ -126,7 +126,7 @@ GAME_APPS.doodle = ALL_APPS.doodle = { name: 'Doodle Duel', icon: { mono: 'DD', 
   const lobby = async (note = '') => {
     conn?.close(); conn = null; peers.clear(); S = H = null; myId = owner = 0; strokes.length = 0;
     body.innerHTML = `<div class="dd dd-center"><div class="dd-card"><h2>Doodle Duel</h2><p class="muted">One player draws, everyone else races to guess the word. 2–10 players.</p>
-      <label class="field">Your name<input class="dd-name" maxlength="16" value="${esc(me.name)}"></label>
+      <label class="field">Name in this room<input class="dd-name" maxlength="24" value="${esc(me.name)}" title="How others see you — separate from your login username"></label>
       <div class="row"><input class="dd-code grow" maxlength="8" placeholder="Room code"><button data-a="join">Join</button></div>
       <div class="row"><button class="primary grow" data-a="create">Create a room</button><label class="row small"><input type="checkbox" class="switch dd-public" checked> Public</label></div>
       ${note ? `<p class="dd-note">${esc(note)}</p>` : ''}
@@ -137,7 +137,7 @@ GAME_APPS.doodle = ALL_APPS.doodle = { name: 'Doodle Duel', icon: { mono: 'DD', 
     box.innerHTML = rooms.length ? rooms.map(r => `<button class="dd-room" data-room="${esc(r.room)}"><b>${esc(r.title)}</b><small>${r.people}/${r.max} · ${esc(r.state || '')}</small></button>`).join('') : '<p class="muted small">No open rooms right now — create one!</p>';
   };
   const join = (room, pub) => {
-    me.name = ($d('.dd-name')?.value.trim() || me.name).slice(0, 16); code = room.replace(/^dd-/, '');
+    me.name = Party.saveNick('game', $d('.dd-name')?.value.trim() || me.name) || me.name; code = room.replace(/^dd-/, '');
     conn = Party.connect('game', room, me.name, {
       welcome: (m, info) => {
         myId = m.id; if (m.name) me.name = m.name; owner = m.owner; peers.clear(); m.peers.forEach(p => peers.set(p.id, p));

@@ -350,7 +350,6 @@ APPS.recorder = ALL_APPS.recorder = { name: 'Recorder', icon: realIcon('obs'), c
     chunks = []; r.ondataavailable = e => e.data.size && chunks.push(e.data);
     r.onerror = e => OS.toast('Recording error: ' + (e.error?.message || 'unknown'));
     r.onstop = async () => {
-      stream.getVideoTracks().forEach(t => t.stop());
       const blob = new Blob(chunks, { type: mime }); chunks = [];
       if (!blob.size) return OS.toast('Nothing was recorded.');
       last = { blob, name: `Recording ${new Date().toLocaleString().replace(/[/:,]/g, '-')}.${ext}` }; ui();
@@ -387,24 +386,61 @@ APPS.recorder = ALL_APPS.recorder = { name: 'Recorder', icon: realIcon('obs'), c
   });
 } };
 
-// ---- App Store (replaces the earlier one): categories, search, installed list ----
+// ---- App Store: curated STORE + lazy-loaded catalog (public/catalog/, built with npm run apps) ----
+const APP_PAGE = 120;
+let appLibPromise;
+const loadAppLibrary = () => appLibPromise || (appLibPromise = fetch('catalog/apps-index.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(async idx => {
+    const parts = await Promise.all(idx.chunks.map(f => fetch('catalog/' + f).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })));
+    return parts.flat();
+  }).catch(e => { appLibPromise = null; throw e; }));
+
 APPS.store = ALL_APPS.store = { ...APPS.store, w: 1000, h: 680, run(body) {
   let cat = 'All', q = '';
+  let lib = [], libState = 'loading', shown = APP_PAGE, list = [], libTotal = 0;
+  const byId = () => {
+    const m = new Map(STORE.map(s => [s.id, s]));
+    for (const s of lib) if (!m.has(s.id)) m.set(s.id, s);
+    return m;
+  };
+  const allApps = () => [...byId().values()];
+  const libCounts = () => { const m = {}; for (const s of allApps()) m[s.cat] = (m[s.cat] || 0) + 1; return m; };
+  loadAppLibrary().then(a => { lib = a; libTotal = a.length; libState = 'ready'; draw(); }, () => { libState = 'failed'; draw(); });
+
+  const filter = () => {
+    const words = q.split(/\s+/).filter(Boolean), inst = OS.cfg.installed || [];
+    list = allApps().filter(s => (cat === 'All' || (cat === 'Installed' ? inst.includes(s.id) : s.cat === cat)) && words.every(w => `${s.name} ${s.desc} ${s.cat}`.toLowerCase().includes(w)));
+    shown = APP_PAGE;
+  };
+  const grid = (append) => {
+    const g = body.querySelector('.store-grid'), inst = OS.cfg.installed || [], from = append ? g.querySelectorAll('[data-id]').length : 0, end = Math.min(list.length, shown);
+    const html = list.slice(from, end).map(s => card(storeIcon(s), s.name, s.desc, `data-id="${s.id}"`,
+      inst.includes(s.id) ? `<button data-open="${s.id}">Open</button><button class="icon-btn" data-rm="${s.id}" title="Uninstall">${glyph('trash', 15)}</button>` : `<button class="primary" data-add="${s.id}">Get</button>`)).join('');
+    if (append) g.querySelector('.hub-more')?.remove(); else { g.innerHTML = ''; g.scrollTop = 0; }
+    g.insertAdjacentHTML('beforeend', html || (append ? '' : `<div class="empty">${libState === 'loading' ? 'Loading the app catalog…' : 'No apps match.'}</div>`));
+    if (end < list.length) g.insertAdjacentHTML('beforeend', `<button class="hub-more ghost">Show more (${(list.length - end).toLocaleString()} left)</button>`);
+    const n = body.querySelector('.store-total'); if (n) n.textContent = `${list.length.toLocaleString()} apps`;
+  };
   const draw = () => {
-    const inst = OS.cfg.installed || [], cats = ['All', 'Installed', ...new Set(STORE.map(s => s.cat))];
-    const count = c => c === 'All' ? STORE.length : c === 'Installed' ? inst.length : STORE.filter(s => s.cat === c).length;
-    const list = STORE.filter(s => (cat === 'All' || (cat === 'Installed' ? inst.includes(s.id) : s.cat === cat)) && (!q || `${s.name} ${s.desc} ${s.cat}`.toLowerCase().includes(q)));
-    body.innerHTML = `<div class="hub"><nav>${cats.map(c => `<button data-cat="${esc(c)}" class="${c === cat ? 'on' : ''}">${esc(c)}<span>${count(c)}</span></button>`).join('')}</nav>
-      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'App Store' : esc(cat)}</h3><p class="muted small">${list.length} apps · installed apps go on your desktop and open through the proxy browser</p></div>
+    const inst = OS.cfg.installed || [], counts = libCounts(), n = c => c === 'All' ? allApps().length : c === 'Installed' ? inst.length : (counts[c] || 0);
+    const cats = ['All', 'Installed', ...Object.keys(counts).filter(c => c !== 'Installed').sort((a, b) => counts[b] - counts[a])];
+    filter();
+    body.innerHTML = `<div class="hub"><nav>${cats.map(c => `<button data-cat="${esc(c)}" class="${c === cat ? 'on' : ''}">${esc(c)}<span>${n(c).toLocaleString()}</span></button>`).join('')}</nav>
+      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'App Store' : esc(cat)}</h3><p class="muted small"><span class="store-total"></span> · ${libState === 'failed' ? 'extra catalog didn’t load · ' : libState === 'loading' ? 'loading catalog… · ' : `${libTotal.toLocaleString()} in library · `}installed apps open through the proxy browser</p></div>
         <input class="hub-q" placeholder="Search apps" value="${esc(q)}"></div>
-      <div class="store-grid">${list.map(s => card(storeIcon(s), s.name, s.desc, `data-id="${s.id}"`,
-        inst.includes(s.id) ? `<button data-open="${s.id}">Open</button><button class="icon-btn" data-rm="${s.id}" title="Uninstall">${glyph('trash', 15)}</button>` : `<button class="primary" data-add="${s.id}">Get</button>`)).join('') || '<div class="empty">No apps match.</div>'}</div></section></div>`;
-    const qi = body.querySelector('.hub-q'); qi.oninput = () => { q = qi.value.toLowerCase(); draw(); const n = body.querySelector('.hub-q'); n.focus(); n.setSelectionRange(99, 99); };
+      <div class="store-grid"></div></section></div>`;
+    grid(false);
+    let timer; const qi = body.querySelector('.hub-q'); qi.oninput = () => { clearTimeout(timer); timer = setTimeout(() => { q = qi.value.trim().toLowerCase(); filter(); grid(false); }, 120); };
   };
   body.onclick = e => {
     const c = e.target.closest('[data-cat]'); if (c) { cat = c.dataset.cat; return draw(); }
-    const d = (e.target.closest('button') || {}).dataset || {}, inst = OS.cfg.installed || [];
-    if (d.add) { OS.set({ installed: [...inst, d.add] }); OS.syncApps(); OS.toast(STORE.find(s => s.id === d.add).name + ' was added to your desktop'); draw(); }
+  if (e.target.closest('.hub-more')) { shown += APP_PAGE; return grid(true); }
+    const d = (e.target.closest('button') || {}).dataset || {}, inst = OS.cfg.installed || [], catalog = byId();
+    if (d.add && catalog.has(d.add)) {
+      const ent = catalog.get(d.add);
+      if (!STORE.find(s => s.id === d.add)) STORE.push(ent);
+      OS.set({ installed: [...inst, d.add] }); OS.syncApps(); OS.toast(ent.name + ' was added to your desktop'); draw();
+    }
     if (d.rm) { OS.set({ installed: inst.filter(i => i !== d.rm) }); OS.syncApps(); draw(); }
     if (d.open) OS.launch('web:' + d.open);
   };

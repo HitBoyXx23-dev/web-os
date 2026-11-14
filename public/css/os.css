@@ -615,8 +615,10 @@ select option { background: var(--surface-2); color: var(--text); }
 /* Live Chat */
 .chat { display: flex; height: 100%; min-height: 0; }
 .chat aside { width: 220px; flex: none; display: flex; flex-direction: column; border-right: 1px solid var(--line); background: var(--surface); overflow: auto; }
-.chat-me { display: flex; align-items: center; gap: 10px; padding: 14px 14px 6px; }
-.chat-me b { display: block; font-weight: 600; }
+.chat-me { display: flex; align-items: flex-start; gap: 10px; padding: 14px 14px 6px; }
+.chat-me .grow { min-width: 0; }
+.chat-nick-lbl { display: block; margin-bottom: 2px; }
+.chat-nick-inp { width: 100%; font-weight: 600; font-size: 13px; padding: 4px 8px; margin-bottom: 4px; }
 .chat-me small { color: var(--text-3); font-size: 12px; }
 .chat-rooms { display: flex; flex-direction: column; padding: 0 8px; gap: 1px; }
 .chat-rooms button { justify-content: flex-start; text-align: left; padding: 6px 10px; border-radius: 6px; background: none; border: 0; color: var(--text-2); }
