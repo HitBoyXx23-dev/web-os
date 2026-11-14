@@ -1,10 +1,11 @@
-// Builds public/games/catalog.json: a compact catalog of HTML5 games from GameMonetize's public publisher feed
-// (https://gamemonetize.com/feed.php — meant for embedding games on other sites). Run: npm run games
-// Each entry is [hash, title, category, width, height, tags]; the thumbnail and play URLs are derived from the hash.
+// Optional: snapshots GameMonetize's public publisher feed to catalog-gamemonetize.json.
+// Merge into the Games manifest only when you run: npm run games -- --feed
+// (https://gamemonetize.com/feed.php — meant for embedding games on other sites).
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 const out = fileURLToPath(new URL('../public/games/', import.meta.url));
+const outFile = out + 'catalog-gamemonetize.json';
 const PER_PAGE = 500, MAX_PAGES = 80;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const hashOf = url => (String(url).match(/gamemonetize\.co\/([0-9a-z]{32})\//) || [])[1];
@@ -24,7 +25,7 @@ async function page(n) {
 }
 
 let seen = new Map();
-try { for (const g of JSON.parse(await readFile(out + 'catalog.json', 'utf8')).games) seen.set(g[0], g); } catch (e) {}
+try { for (const g of JSON.parse(await readFile(outFile, 'utf8')).games) seen.set(g[0], g); } catch (e) {}
 const start = seen.size;
 for (let n = 1; n <= MAX_PAGES; n++) {
   let list; try { list = await page(n); } catch (e) { console.log(e.message + ' — saving what we have'); break; }
@@ -39,5 +40,5 @@ for (let n = 1; n <= MAX_PAGES; n++) {
 }
 await mkdir(out, { recursive: true });
 const games = [...seen.values()];
-await writeFile(out + 'catalog.json', JSON.stringify({ source: 'GameMonetize', built: new Date().toISOString().slice(0, 10), games }));
-console.log(`wrote ${games.length} games (${games.length - start} new)`);
+await writeFile(outFile, JSON.stringify({ source: 'GameMonetize', built: new Date().toISOString().slice(0, 10), games }));
+console.log(`wrote ${games.length} games (${games.length - start} new) to catalog-gamemonetize.json`);

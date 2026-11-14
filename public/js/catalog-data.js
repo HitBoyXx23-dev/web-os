@@ -1,4 +1,4 @@
-// More apps and web games for the App Store and Games (generated; every address was checked when the list was made).
+// More apps and web games for the App Store and Games (curated; every address was checked when the list was made).
 STORE.push(
   {"id": "chatgpt", "name": "ChatGPT", "fav": 1, "desc": "Chat with OpenAI's assistant", "url": "https://chatgpt.com/", "cat": "AI"},
   {"id": "claude", "name": "Claude", "fav": 1, "desc": "Chat with Anthropic's Claude", "url": "https://claude.ai/", "cat": "AI"},

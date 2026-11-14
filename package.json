@@ -9,7 +9,9 @@
     "home": "node scripts/home.js",
     "vendor": "node scripts/vendor.js",
     "dos-bundles": "node scripts/dos-bundles.js",
-    "games": "node scripts/games-feed.mjs"
+    "games": "node scripts/build-game-manifest.mjs",
+    "games:feed": "node scripts/games-feed.mjs",
+    "apps": "node scripts/build-apps-catalog.mjs"
   },
   "dependencies": {
     "@mercuryworkshop/bare-mux": "^2.1.9",
