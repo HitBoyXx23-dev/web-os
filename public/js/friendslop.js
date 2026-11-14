@@ -63,7 +63,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   const cv = body.querySelector('canvas'), cx = cv.getContext('2d'), ui = body.querySelector('.ss-ui'), sayF = body.querySelector('.ss-say'), sayI = sayF.querySelector('input');
   const dark = document.createElement('canvas'), dx = dark.getContext('2d');
   let conn = null, myId = 1, hostId = 1, solo = true, peers = new Map(), running = true;
-  const me = { name: (OS.account?.name || OS.user).split(' ')[0], color: SS_COLORS[(localStorage.getItem('novaos.ssColor') ?? (Math.random() * SS_COLORS.length | 0)) % SS_COLORS.length], x: 0, y: 0, a: 0, fl: true, dead: false, stam: 1, e: 0, eAt: 0 };
+  const me = { name: Party.nick('game').split(' ')[0], color: SS_COLORS[(localStorage.getItem('novaos.ssColor') ?? (Math.random() * SS_COLORS.length | 0)) % SS_COLORS.length], x: 0, y: 0, a: 0, fl: true, dead: false, stam: 1, e: 0, eAt: 0 };
   let W = null; // world: { seed, lv, q, b, tl, ph, map, msg }
   const players = () => [{ id: myId, ...me }, ...[...peers.values()].filter(p => p.x !== undefined)];
   const isHost = () => myId === hostId;
@@ -374,7 +374,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
   // ---- lobby ----
   const lobby = (note = '') => {
     ui.innerHTML = `<div class="ss-lobby"><h2>Scrap Shift</h2><p class="muted">Grab scrap, bring it back to the ship, meet the quota. Stay in the light — and stay together.</p>
-      <label class="field">Name<input class="ss-name" maxlength="16" value="${esc(me.name)}"></label>
+      <label class="field">Name in this room<input class="ss-name" maxlength="24" value="${esc(me.name)}" title="How others see you — separate from your login username"></label>
       <div class="ss-colors">${SS_COLORS.map((c, i) => `<button data-color="${i}" style="background:${c}" class="${me.color === c ? 'on' : ''}"></button>`).join('')}</div>
       <div class="row"><input class="ss-code grow" maxlength="8" placeholder="Room code"><button data-a="join">Join</button></div>
       <div class="row"><button class="primary grow" data-a="create">Create a room</button><button class="grow" data-a="solo">Play solo</button></div>
@@ -420,7 +420,7 @@ GAME_APPS.scrapshift = ALL_APPS.scrapshift = { name: 'Scrap Shift', icon: { mono
     const c = e.target.closest('[data-color]'); if (c) { me.color = SS_COLORS[+c.dataset.color]; localStorage.setItem('novaos.ssColor', c.dataset.color); ui.querySelectorAll('[data-color]').forEach(b => b.classList.toggle('on', b === c)); return; }
     const rm = e.target.closest('[data-room]'); if (rm) return connect(rm.dataset.room.replace(/^ss-/, ''));
     const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
-    const nm = ui.querySelector('.ss-name'); if (nm) me.name = nm.value.trim().slice(0, 16) || me.name;
+    const nm = ui.querySelector('.ss-name'); if (nm) me.name = Party.saveNick('game', nm.value.trim()) || me.name;
     if (a === 'solo') { solo = true; myId = hostId = 1; newShift(1, 150); begin(); }
     if (a === 'create') connect(Math.random().toString(36).slice(2, 6), ui.querySelector('.ss-public').checked);
     if (a === 'join') { const code = ui.querySelector('.ss-code').value.trim(); if (code) connect(code); }

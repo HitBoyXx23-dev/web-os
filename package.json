@@ -9,8 +9,8 @@
     "home": "node scripts/home.js",
     "vendor": "node scripts/vendor.js",
     "dos-bundles": "node scripts/dos-bundles.js",
-    "games": "node scripts/build-game-manifest.mjs",
-    "games:feed": "node scripts/games-feed.mjs",
+    "games": "node scripts/games-feed.mjs",
+    "games:manifest": "node scripts/build-game-manifest.mjs",
     "apps": "node scripts/build-apps-catalog.mjs"
   },
   "dependencies": {
