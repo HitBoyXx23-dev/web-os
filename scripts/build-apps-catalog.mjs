@@ -1,4 +1,4 @@
-// Builds public/catalog/apps-*.json: curated STORE + HTML5 games (chunked lazy load). Run: npm run apps
+// Builds public/catalog/apps-*.json: curated STORE entries only (no GameMonetize bulk). Run: npm run apps
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -20,13 +20,6 @@ const push = e => {
 };
 
 for (const s of STORE) push(s);
-
-let games = [];
-try { games = JSON.parse(await readFile(root + '/public/games/catalog.json', 'utf8')).games || []; } catch (e) {}
-for (const g of games) {
-  const [h, name, cat] = g;
-  push({ id: `gm-${h}`, name, desc: `HTML5 · ${cat || 'game'}`, url: `https://html5.gamemonetize.co/${h}/`, cat: 'Games' });
-}
 
 await mkdir(outDir, { recursive: true });
 const chunks = [];

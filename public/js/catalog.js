@@ -44,13 +44,22 @@ const WEB_CATALOG = [
 ];
 const GAME_CATS = ['Multiplayer', 'Action', 'Racing', 'Sports', 'Puzzle', 'Arcade', 'Idle', 'Strategy', 'Sandbox'];
 
-// The game library: thousands of HTML5 games from GameMonetize's publisher feed (see scripts/games-feed.mjs).
+// Extra web games from public/games/manifest-*.json (built with npm run games from curated URL lists only).
 const PAGE = 120;
-let libraryPromise;
-const loadGameLibrary = () => libraryPromise || (libraryPromise = fetch('games/catalog.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-  .then(d => d.games.map(([h, name, cat, w, hh, tags]) => ({ name, cat, lib: true, url: `https://html5.gamemonetize.co/${h}/`, thumb: `https://img.gamemonetize.com/${h}/512x384.jpg`, sub: cat, s: `${name} ${tags} ${cat}`.toLowerCase() })))
-  .catch(e => { libraryPromise = null; throw e; }));
-const thumbFail = img => { const s = document.createElement('span'); s.className = 'hub-thumb'; s.textContent = img.dataset.fb || '?'; img.replaceWith(s); };
+const webUrlKey = url => { try { const u = new URL(url); u.hash = ''; let h = u.href; if (h.endsWith('/') && u.pathname !== '/') h = h.slice(0, -1); return h; } catch (e) { return ''; } };
+const webRows = () => WEB_CATALOG.map(([c, name, url, img]) => ({ name, cat: c, url, icon: img ? realIcon(img) : favIcon(url), sub: new URL(url).hostname.replace(/^www\./, ''), s: name.toLowerCase() }));
+let manifestPromise;
+const loadManifestExtras = () => manifestPromise || (manifestPromise = fetch('games/manifest-index.json').then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(async idx => {
+    const known = new Set(WEB_CATALOG.map(([, , url]) => webUrlKey(url)));
+    const parts = await Promise.all(idx.chunks.map(f => fetch('games/' + f).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })));
+    return parts.flat().filter(g => g.url && !known.has(webUrlKey(g.url))).map(g => ({
+      name: g.name, cat: g.cat, url: g.url,
+      icon: g.icon ? realIcon(g.icon) : favIcon(g.url),
+      sub: new URL(g.url).hostname.replace(/^www\./, ''),
+      s: `${g.name} ${g.cat}`.toLowerCase(),
+    }));
+  }).catch(e => { manifestPromise = null; throw e; }));
 
 // Opens a site through the proxy browser in app mode (most game sites refuse to load in a plain frame).
 const openWeb = (name, url, icon) => WM.open({ title: name, icon: icon || favIcon(url), w: 1100, h: 720, content: (b, w) => BrowserApp(b, w, { url, single: true, title: name }) });
@@ -96,20 +105,19 @@ APPS.games = ALL_APPS.games = { ...APPS.games, w: 980, h: 660, run(body) {
   const custom = () => JSON.parse(localStorage.getItem('novaos.customGames') || '[]');
   const builtin = Object.entries(GAME_APPS).map(([id, g]) => ({ name: g.name, cat: 'Built-in', app: id, icon: g.icon, sub: g.desc, s: g.name.toLowerCase() }))
     .concat(Object.entries(DOS_APPS).map(([id, g]) => ({ name: g.name, cat: 'Built-in', app: id, icon: g.icon, sub: g.desc, s: g.name.toLowerCase() })));
-  const web = () => WEB_CATALOG.map(([c, name, url, img]) => ({ name, cat: c, url, icon: img ? realIcon(img) : favIcon(url), sub: new URL(url).hostname.replace(/^www\./, ''), s: name.toLowerCase() }))
-    .concat(custom().map((g, i) => ({ name: g.name, cat: 'My games', url: g.url, icon: favIcon(g.url), sub: 'Added by you', rm: i, s: g.name.toLowerCase() })));
-  // The big library (public/games/catalog.json, built by `npm run games`) loads on first open; only one page of cards is drawn at a time.
-  let lib = [], libState = 'loading', shown = PAGE, list = [];
+  const web = () => webRows().concat(custom().map((g, i) => ({ name: g.name, cat: 'My games', url: g.url, icon: favIcon(g.url), sub: 'Added by you', rm: i, s: g.name.toLowerCase() })));
+  let lib = [], libState = 'loading', shown = PAGE, list = [], manifestTotal = 0;
   const libCounts = () => { const m = {}; for (const g of lib) m[g.cat] = (m[g.cat] || 0) + 1; return m; };
-  loadGameLibrary().then(g => { lib = g; libState = 'ready'; draw(); }, () => { libState = 'failed'; draw(); });
-  const card = g => `<div class="hub-card${g.lib ? ' lib' : ''}" ${g.app ? `data-app="${g.app}"` : `data-url="${esc(g.url)}" data-name="${esc(g.name)}"`}>${g.lib ? `<img class="hub-thumb" src="${esc(g.thumb)}" width="128" height="96" alt="" loading="lazy" draggable="false" data-fb="${esc(g.name[0] || '?')}" onerror="thumbFail(this)">` : tile(g.icon, 48)}<b>${esc(g.name)}</b><small>${esc(g.sub)}</small>${g.rm !== undefined ? `<button class="icon-btn hub-rm" data-rm="${g.rm}" title="Remove">${glyph('trash', 14)}</button>` : ''}</div>`;
+  fetch('games/manifest-index.json').then(r => r.ok ? r.json() : {}).then(idx => { manifestTotal = idx.total || 0; if (libState === 'ready') draw(); }).catch(() => {});
+  loadManifestExtras().then(g => { lib = g; libState = 'ready'; draw(); }, () => { libState = 'ready'; draw(); });
+  const card = g => `<div class="hub-card" ${g.app ? `data-app="${g.app}"` : `data-url="${esc(g.url)}" data-name="${esc(g.name)}"`}>${tile(g.icon, 48)}<b>${esc(g.name)}</b><small>${esc(g.sub)}</small>${g.rm !== undefined ? `<button class="icon-btn hub-rm" data-rm="${g.rm}" title="Remove">${glyph('trash', 14)}</button>` : ''}</div>`;
   const grid = (append) => {
     const g = body.querySelector('.hub-grid'), from = append ? g.querySelectorAll('.hub-card').length : 0, end = Math.min(list.length, shown);
     const html = list.slice(from, end).map(card).join('');
     if (append) g.querySelector('.hub-more')?.remove(); else { g.innerHTML = ''; g.scrollTop = 0; }
-    g.insertAdjacentHTML('beforeend', html || (append ? '' : `<div class="empty">${libState === 'loading' ? 'Loading the game library…' : 'No games match.'}</div>`));
+    g.insertAdjacentHTML('beforeend', html || (append ? '' : `<div class="empty">${libState === 'loading' ? 'Loading games…' : 'No games match.'}</div>`));
     if (end < list.length) g.insertAdjacentHTML('beforeend', `<button class="hub-more ghost">Show more (${(list.length - end).toLocaleString()} left)</button>`);
-    body.querySelector('.hub-n').textContent = `${list.length.toLocaleString()} games`;
+    body.querySelector('.hub-n').textContent = `${list.length.toLocaleString()} real games`;
   };
   const filter = () => {
     const words = q.split(/\s+/).filter(Boolean);
@@ -122,7 +130,7 @@ APPS.games = ALL_APPS.games = { ...APPS.games, w: 980, h: 660, run(body) {
     const cats = ['All', 'Built-in', ...GAME_CATS, ...extra, ...(mine ? ['My games'] : [])];
     filter();
     body.innerHTML = `<div class="hub"><nav>${cats.map(c => `<button data-cat="${esc(c)}" class="${c === cat ? 'on' : ''}">${esc(c)}<span>${n(c).toLocaleString()}</span></button>`).join('')}</nav>
-      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'Games' : esc(cat)}</h3><p class="muted small"><span class="hub-n"></span> · ${libState === 'failed' ? 'the game library couldn’t load · ' : libState === 'loading' ? 'loading the library… · ' : ''}built-in ones work offline; web games open through the proxy</p></div>
+      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'Games' : esc(cat)}</h3><p class="muted small"><span class="hub-n"></span>${manifestTotal ? ` · ${manifestTotal.toLocaleString()} official links in the catalog` : ''} · ${libState === 'loading' ? 'checking for more curated links… · ' : ''}built-ins work offline; web games open on their official sites through the proxy</p></div>
         <input class="hub-q" placeholder="Search games" value="${esc(q)}"></div>
       <div class="hub-grid"></div>
       <div class="row hub-add"><input class="gn" placeholder="Name" style="width:160px"><input class="gu grow" placeholder="Add any game by its address: https://…"><button class="primary ga">Add game</button></div></section></div>`;
@@ -419,14 +427,14 @@ APPS.store = ALL_APPS.store = { ...APPS.store, w: 1000, h: 680, run(body) {
     if (append) g.querySelector('.hub-more')?.remove(); else { g.innerHTML = ''; g.scrollTop = 0; }
     g.insertAdjacentHTML('beforeend', html || (append ? '' : `<div class="empty">${libState === 'loading' ? 'Loading the app catalog…' : 'No apps match.'}</div>`));
     if (end < list.length) g.insertAdjacentHTML('beforeend', `<button class="hub-more ghost">Show more (${(list.length - end).toLocaleString()} left)</button>`);
-    const n = body.querySelector('.store-total'); if (n) n.textContent = `${list.length.toLocaleString()} apps`;
+    const n = body.querySelector('.store-total'); if (n) n.textContent = `${list.length.toLocaleString()} curated apps`;
   };
   const draw = () => {
     const inst = OS.cfg.installed || [], counts = libCounts(), n = c => c === 'All' ? allApps().length : c === 'Installed' ? inst.length : (counts[c] || 0);
     const cats = ['All', 'Installed', ...Object.keys(counts).filter(c => c !== 'Installed').sort((a, b) => counts[b] - counts[a])];
     filter();
     body.innerHTML = `<div class="hub"><nav>${cats.map(c => `<button data-cat="${esc(c)}" class="${c === cat ? 'on' : ''}">${esc(c)}<span>${n(c).toLocaleString()}</span></button>`).join('')}</nav>
-      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'App Store' : esc(cat)}</h3><p class="muted small"><span class="store-total"></span> · ${libState === 'failed' ? 'extra catalog didn’t load · ' : libState === 'loading' ? 'loading catalog… · ' : `${libTotal.toLocaleString()} in library · `}installed apps open through the proxy browser</p></div>
+      <section><div class="hub-head"><div><h3>${cat === 'All' ? 'App Store' : esc(cat)}</h3><p class="muted small"><span class="store-total"></span> · ${libState === 'failed' ? 'catalog didn’t load · ' : libState === 'loading' ? 'loading catalog… · ' : 'official & curated links only · '}installed apps open through the proxy browser</p></div>
         <input class="hub-q" placeholder="Search apps" value="${esc(q)}"></div>
       <div class="store-grid"></div></section></div>`;
     grid(false);
