@@ -94,12 +94,14 @@ const OS = {
     el.style.left = Math.max(8, Math.min(x, innerWidth - el.offsetWidth - 8)) + 'px'; el.style.top = Math.max(8, Math.min(y, innerHeight - el.offsetHeight - 8)) + 'px';
   },
 
+  warmProxy() {
+    if (this.cfg.proxy === false || typeof WebProxy === 'undefined' || !WebProxy.supported()) return;
+    WebProxy.ready().then(() => WebProxy.setTransport()).catch(() => {});
+  },
   enterDesktop(unlocking) {
     if (/[#&]live=/.test(location.hash)) setTimeout(() => this.launch('live'), 300);
     $('#desktop').classList.remove('hidden');
-    if (this.cfg.proxy !== false && typeof WebProxy !== 'undefined' && WebProxy.supported()) {
-      WebProxy.ready().then(() => WebProxy.setTransport()).catch(() => {});
-    }
+    this.warmProxy();
     Shell.apply();
     if (Shell.current().cli) { if (unlocking && Shell.cliActive()) $('#cli input')?.focus(); else Shell.showCli(); } else this.set({ lastGui: this.cfg.shell || 'hitboy' });
     if (!unlocking) {
@@ -109,6 +111,7 @@ const OS = {
   },
 
   initDesktop() {
+    this.warmProxy();
     document.querySelectorAll('.mark-slot').forEach(s => s.appendChild($('#mark-tpl').content.cloneNode(true)));
     $('#l-icon').innerHTML = glyph('search', 16);
     $('#topbar').dataset.ready = 1;

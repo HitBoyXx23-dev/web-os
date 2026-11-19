@@ -328,17 +328,44 @@ function BrowserApp(body, win, opts = {}) {
     f.setAttribute('allow', 'autoplay; fullscreen; clipboard-write; gamepad; encrypted-media');
     f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock allow-downloads allow-presentation');
     f.setAttribute('allowfullscreen', ''); f.src = src; t.el.appendChild(f); t.frame = f;
+    const failTimer = !direct && setTimeout(() => {
+      if (!t.frame) return;
+      let plain = '';
+      try { plain = f.contentDocument?.body?.innerText?.trim() || ''; } catch (e) {}
+      if (/^There was an error loading|^The model is busy/i.test(plain) || (plain.length < 80 && /error/i.test(plain))) {
+        const other = (t.engine || WebProxy.engineFor()) === 'scramjet' ? 'hitboy' : 'scramjet';
+        t.el.innerHTML = `<div class="notice"><h3>Page did not load</h3><p class="muted">The proxy could not fetch this site yet. Try again or switch engines.</p>
+          <p class="small muted">${esc(plain.slice(0, 160))}</p>
+          <div class="row"><button class="primary" data-act="retry">Try again</button><button data-act="other">Open with ${engineName(other)}</button><button data-act="direct">Load without proxy</button></div></div>`;
+        t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor());
+        t.el.querySelector('[data-act=other]').onclick = () => { OS.set({ engine: other }); navigate(t, url, true, other); };
+        t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url, true, 'direct'); };
+      }
+    }, 22000);
     f.onload = () => {
+      clearTimeout(failTimer);
       loading(false);
       try { // same-origin when proxied: read the real URL and title
         const real = WebProxy.decode(f.contentWindow.location.pathname + f.contentWindow.location.search + f.contentWindow.location.hash);
         if (real) t.url = real;
+        const plain = (f.contentDocument.body?.innerText || '').trim();
+        if (/^There was an error loading this page\./.test(plain)) throw new Error('load');
         t.title = f.contentDocument.title || hostOf(t.url);
         const clicked = youtubeId(t.url);
         if (clicked && !t.pageWanted) return openYouTube(t, t.url, clicked);
         // links that try to open new windows open as new tabs instead
         f.contentWindow.open = (href) => { if (href) newTab(new URL(href, t.url).href); return null; };
-      } catch (e) {}
+      } catch (e) {
+        if (!direct && t.frame) {
+          const other = (t.engine || WebProxy.engineFor()) === 'scramjet' ? 'hitboy' : 'scramjet';
+          t.el.innerHTML = `<div class="notice"><h3>Page did not load</h3><p class="muted">The proxy could not fetch this site.</p>
+            <div class="row"><button class="primary" data-act="retry">Try again</button><button data-act="other">Open with ${engineName(other)}</button><button data-act="direct">Load without proxy</button></div></div>`;
+          t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor());
+          t.el.querySelector('[data-act=other]').onclick = () => { OS.set({ engine: other }); navigate(t, url, true, other); };
+          t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url, true, 'direct'); };
+          return;
+        }
+      }
       if (t === cur) { u.value = t.url; renderBookmarks(); renderPx(); } renderTabs();
       if (!t.private) addHistory(t.url, t.title);
     };
