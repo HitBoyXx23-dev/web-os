@@ -6,7 +6,7 @@
     const u = new URL(remote, root.location ? root.location.href : 'https://example.invalid/');
     const hash = u.hash || '';
     u.hash = '';
-    return base + 'hb/' + u.href + hash;
+    return base + 'hb/' + encodeURIComponent(u.href) + hash;
   }
 
   function targetOf(requestUrl, base) {
@@ -15,10 +15,11 @@
     catch (e) { return null; }
     const prefix = base + 'hb/';
     if (!u.pathname.startsWith(prefix)) return null;
-    let rest = u.pathname.slice(prefix.length) + u.search;
+    let rest = u.pathname.slice(prefix.length);
+    try { rest = decodeURIComponent(rest); } catch (e) {}
     rest = rest.replace(/^(https?:)\/(?!\/)/i, '$1//');
     if (!/^https?:\/\//i.test(rest)) return null;
-    try { return new URL(rest); }
+    try { return new URL(rest + u.search + (u.hash || '')); }
     catch (e) { return null; }
   }
 
@@ -43,7 +44,7 @@
         const u = new URL(abs);
         if (u.origin === origin && u.pathname.indexOf('/hb/') !== -1) return abs;
       } catch (e) {}
-      return prefix + abs;
+      return prefix + encodeURIComponent(abs);
     };
   }
 
@@ -106,7 +107,7 @@
         var u = new URL(abs);
         if (u.origin === location.origin && u.pathname.indexOf('/hb/') !== -1) return abs;
       } catch (e) {}
-      return prefix + abs;
+      return prefix + encodeURIComponent(abs);
     }
     var attrs = ['href', 'src', 'action', 'poster', 'formaction', 'data-src', 'background'];
     function rewriteNode(node) {
@@ -279,7 +280,7 @@
     if (status >= 300 && status < 400) {
       const loc = res.headers.get('location');
       if (loc) {
-        try { headers.set('location', originBase + 'hb/' + new URL(loc, finalURL).href); }
+        try { headers.set('location', originBase + 'hb/' + encodeURIComponent(new URL(loc, finalURL).href)); }
         catch (e) {}
       }
       return new Response(null, { status, statusText: res.statusText, headers });

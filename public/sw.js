@@ -12,7 +12,7 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v26';
+const CACHE = 'novaos-v27';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline, including the HitBoy rewriter; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
@@ -104,9 +104,21 @@ async function hitboyFetch(event) {
   try { headers.referer = target.origin + '/'; } catch (e) {}
   let body;
   if (req.method !== 'GET' && req.method !== 'HEAD') body = await req.arrayBuffer();
-  const res = await hitboyClient().fetch(target.href, { method: req.method, headers, body, redirect: 'follow' });
-  const finalURL = res.finalURL || target.href;
-  return HitBoyProxy.rewriteResponse(res, finalURL, self.location.origin + BASE, req.destination);
+  let lastErr;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const res = await hitboyClient().fetch(target.href, { method: req.method, headers, body, redirect: 'follow' });
+      const finalURL = res.finalURL || target.href;
+      return HitBoyProxy.rewriteResponse(res, finalURL, self.location.origin + BASE, req.destination);
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err?.message || err);
+      if (!/bare|transport|MessagePort|timeout/i.test(msg)) throw err;
+      hbClient = null;
+      await new Promise(r => setTimeout(r, 350));
+    }
+  }
+  throw lastErr;
 }
 
 async function shield(event, res) {

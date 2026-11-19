@@ -97,6 +97,9 @@ const OS = {
   enterDesktop(unlocking) {
     if (/[#&]live=/.test(location.hash)) setTimeout(() => this.launch('live'), 300);
     $('#desktop').classList.remove('hidden');
+    if (this.cfg.proxy !== false && typeof WebProxy !== 'undefined' && WebProxy.supported()) {
+      WebProxy.ready().then(() => WebProxy.setTransport()).catch(() => {});
+    }
     Shell.apply();
     if (Shell.current().cli) { if (unlocking && Shell.cliActive()) $('#cli input')?.focus(); else Shell.showCli(); } else this.set({ lastGui: this.cfg.shell || 'hitboy' });
     if (!unlocking) {
