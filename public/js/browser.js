@@ -131,11 +131,13 @@ const monoOf = u => { const h = hostOf(u); return h.charAt(0).toUpperCase() + (h
 // opts: { url, single, title } — single = app mode (no tab strip).
 function BrowserApp(body, win, opts = {}) {
   body.innerHTML = `<div class="fill browser">
-    <div class="tabs"><div class="tablist"></div><button class="icon-btn newtab" title="New tab">${glyph('plus')}</button></div>
+    <div class="tabs"><div class="tablist"></div><button class="icon-btn newtab" title="New tab (Ctrl+T)">${glyph('plus')}</button></div>
     <div class="toolbar">
       <button class="icon-btn bk" title="Back">${glyph('back')}</button><button class="icon-btn fw" title="Forward">${glyph('forward')}</button>
-      <button class="icon-btn rl" title="Reload">${glyph('reload')}</button><button class="icon-btn hm" title="Home">${glyph('home')}</button>
-      <div class="omni"><input class="u" spellcheck="false" placeholder="Search or enter address"><button class="badge px" title="Toggle proxy"></button></div>
+      <button class="icon-btn rl" title="Reload (Ctrl+R)">${glyph('reload')}</button><button class="icon-btn hm" title="Home">${glyph('home')}</button>
+      <div class="omni"><span class="omni-site muted" title="Site"></span><input class="u" spellcheck="false" placeholder="Search or enter address"><button class="badge px" title="Proxy options"></button></div>
+      <button class="icon-btn hist" title="Recent pages">${glyph('search', 14)}</button>
+      <button class="icon-btn zm-out" title="Zoom out">−</button><button class="icon-btn zm-lbl small muted" title="Page zoom">100%</button><button class="icon-btn zm-in" title="Zoom in">+</button>
       <button class="icon-btn bm" title="Bookmark this page">${glyph('star')}</button><button class="icon-btn pop" title="Open in about:blank tab">${glyph('external')}</button>
     </div>
     <div class="loadbar"></div>
@@ -148,7 +150,42 @@ function BrowserApp(body, win, opts = {}) {
   const proxyOn = () => OS.cfg.proxy !== false;
   const loading = on => { bar.style.opacity = 1; bar.style.width = on ? '70%' : '100%'; if (!on) setTimeout(() => { bar.style.opacity = 0; bar.style.width = 0; }, 300); };
 
+  const ZOOM_STEPS = [75, 90, 100, 110, 125, 150];
   const engineName = eng => eng === 'scramjet' ? 'Scramjet' : 'HitBoy Proxy';
+  const secureUrl = url => { try { return new URL(url).protocol === 'https:'; } catch (e) { return false; } };
+  const renderOmniSite = () => {
+    const box = $b('.omni-site');
+    if (!box) return;
+    const url = cur?.url || '';
+  if (!url.startsWith('http')) { box.innerHTML = glyph('search', 14); box.title = 'Search'; return; }
+    box.innerHTML = secureUrl(url) ? glyph('lock', 14) : glyph('web', 14);
+    box.title = secureUrl(url) ? hostOf(url) + ' · secure' : hostOf(url);
+  };
+  const applyZoom = t => {
+    const z = t.zoom || 100;
+    const lbl = $b('.zm-lbl');
+    if (lbl) lbl.textContent = z + '%';
+    if (!t.frame) return;
+    const inner = t.frame.parentElement;
+    if (inner) inner.style.setProperty('--br-zoom', String(z / 100));
+  };
+  const bumpZoom = d => {
+    if (!cur) return;
+    const i = ZOOM_STEPS.indexOf(cur.zoom || 100);
+    const next = ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, (i < 0 ? 2 : i) + d))];
+    cur.zoom = next;
+    applyZoom(cur);
+  };
+  const showFailNotice = (t, url, plain) => {
+    const other = (t.engine || WebProxy.engineFor()) === 'scramjet' ? 'hitboy' : 'scramjet';
+    t.frame = null;
+    t.el.innerHTML = `<div class="notice"><h3>Page did not load</h3><p class="muted">The proxy could not fetch this site. Try again, switch engines, or load without the proxy.</p>
+      ${plain ? `<p class="small muted">${esc(String(plain).slice(0, 200))}</p>` : ''}
+      <div class="row"><button class="primary" data-act="retry">Try again</button><button data-act="other">Open with ${engineName(other)}</button><button data-act="direct">Load without proxy</button></div></div>`;
+    t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor());
+    t.el.querySelector('[data-act=other]').onclick = () => { OS.set({ engine: other }); navigate(t, url, true, other); };
+    t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url, true, 'direct'); };
+  };
   const renderPx = () => {
     const b = $b('.px'), on = proxyOn() && !(cur && cur.direct);
     const eng = on && cur && cur.engine ? cur.engine : WebProxy.engine();
@@ -163,23 +200,31 @@ function BrowserApp(body, win, opts = {}) {
     $b('.bm').classList.toggle('on', !!cur && bms.some(b => b.url === cur.url));
   };
   const renderTabs = () => {
-    $b('.tablist').innerHTML = tabs.map((t, i) => `<div class="tab${t === cur ? ' on' : ''}${t.private ? ' private' : ''}" data-i="${i}" title="${esc(t.title || 'New Tab')}${t.private ? ' (private)' : ''}"><span>${t.private ? '🕶 ' : ''}${esc(t.title || 'New Tab')}</span><button class="tx" data-x="${i}">${glyph('close', 12)}</button></div>`).join('');
+    $b('.tablist').innerHTML = tabs.map((t, i) => `<div class="tab${t === cur ? ' on' : ''}${t.private ? ' private' : ''}${t.loading ? ' loading' : ''}" data-i="${i}" title="${esc(t.title || 'New Tab')}${t.private ? ' (private)' : ''}"><span>${t.private ? 'Private · ' : ''}${esc(t.title || 'New Tab')}</span><button class="tx" data-x="${i}">${glyph('close', 12)}</button></div>`).join('');
     if (cur) WM.setTitle(win, opts.single ? (opts.title || 'Browser') : (cur.title || 'New Tab') + ' — Browser');
   };
-  const homeHtml = () => `<div class="newtab-page"><div class="nt-brand"><span style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML.replace('class="mark"', 'class="mark" style="width:30px;height:30px"')}</span>Search</div>
-    <div class="nt-q">${glyph('search', 18)}<input placeholder="Search the web or type an address" spellcheck="false"></div>
+  const homeHtml = () => {
+    const engine = (SEARCH_ENGINES[OS.cfg.search] || SEARCH_ENGINES.duckduckgo)[0];
+    const recent = (OS.cfg.history || []).slice(0, 10);
+    const recentBlock = recent.length ? `<div class="nt-recent"><p class="small muted">Recent</p><div class="nt-recent-list">${recent.map(h =>
+      `<button type="button" class="ghost small" data-url="${esc(h.url)}" title="${esc(h.url)}">${esc((h.title || hostOf(h.url)).slice(0, 42))}</button>`).join('')}</div></div>` : '';
+    return `<div class="newtab-page"><div class="nt-brand"><span style="color:var(--accent)">${document.getElementById('mark-tpl').innerHTML.replace('class="mark"', 'class="mark" style="width:30px;height:30px"')}</span>${esc(engine)}</div>
+    <div class="nt-q">${glyph('search', 18)}<input placeholder="Search with ${esc(engine)} or type an address" spellcheck="false"></div>
     <div class="shortcuts">${[...QUICK_LINKS, ...(OS.cfg.bookmarks || []).map(b => ({ name: b.title, url: b.url }))].slice(0, 16).map(l =>
       `<div class="app-cell" data-url="${esc(l.url)}" title="${esc(l.url)}">${tile(l.img ? realIcon(l.img) : { mono: l.mono || monoOf(l.url), bg: l.bg || '#52525b' }, 40)}<span style="max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.name)}</span></div>`).join('')}</div>
+    ${recentBlock}
     <div class="status-line"><span class="dot"></span><span class="nt-status">${proxyOn() ? 'Connecting to proxy…' : 'Proxy is off. Sites load directly.'}</span></div></div>`;
+  };
 
   const select = t => {
     cur = t; tabs.forEach(x => x.el.style.display = x === t ? '' : 'none');
-    u.value = t.url || ''; renderTabs(); renderBookmarks(); renderPx();
+    u.value = t.url || '';
+    renderTabs(); renderBookmarks(); renderPx(); renderOmniSite(); applyZoom(t);
   };
   // priv: a private tab — nothing it visits is saved to history.
   const newTab = (url, priv) => {
     const el = document.createElement('div'); el.className = 'page'; pages.appendChild(el);
-    const t = { el, url: '', title: priv ? 'Private Tab' : 'New Tab', frame: null, private: !!priv }; tabs.push(t); select(t);
+    const t = { el, url: '', title: priv ? 'Private Tab' : 'New Tab', frame: null, private: !!priv, zoom: 100, loading: false }; tabs.push(t); select(t);
     url ? navigate(t, url) : home(t);
     return t;
   };
@@ -195,6 +240,7 @@ function BrowserApp(body, win, opts = {}) {
     const q = t.el.querySelector('.nt-q input');
     q.onkeydown = e => e.key === 'Enter' && q.value.trim() && navigate(t, toUrl(q.value));
     t.el.querySelector('.shortcuts').onclick = e => { const c = e.target.closest('[data-url]'); if (c) navigate(t, c.dataset.url); };
+    t.el.querySelector('.nt-recent-list')?.addEventListener('click', e => { const b = e.target.closest('[data-url]'); if (b) navigate(t, b.dataset.url); });
     if (proxyOn()) OS.proxyStatus().then(([ok, m]) => { const s = t.el.querySelector('.nt-status'); if (s) { s.textContent = m; s.previousElementSibling.className = 'dot ' + (ok ? 'ok' : 'bad'); } });
     if (t === cur) { u.value = ''; renderTabs(); renderBookmarks(); setTimeout(() => q.focus()); }
   };
@@ -303,6 +349,8 @@ function BrowserApp(body, win, opts = {}) {
     if (vid) return openYouTube(t, url, vid);
     const direct = force === 'direct' || !proxyOn(); t.direct = direct;
     t.url = url; t.title = hostOf(url);
+    t.loading = true;
+    renderTabs();
     let src = url;
     loading(true);
     if (!direct) {
@@ -313,6 +361,7 @@ function BrowserApp(body, win, opts = {}) {
         src = WebProxy.encode(url, t.engine);
       }
       catch (e) {
+        t.loading = false;
         loading(false);
         t.el.innerHTML = `<div class="notice"><h3>Can't reach the proxy</h3><p class="muted">${esc(e.message)}</p>
           <p class="muted">This site's server didn't answer. Refresh, or turn the proxy off and load the page directly.</p>
@@ -323,27 +372,23 @@ function BrowserApp(body, win, opts = {}) {
       }
     }
     if (t === cur) { u.value = url; renderTabs(); renderBookmarks(); renderPx(); }
-    t.el.innerHTML = ''; const f = document.createElement('iframe');
+    t.el.innerHTML = '<div class="page-zoom"></div>';
+    const wrap = t.el.firstChild;
+    const f = document.createElement('iframe');
     f.dataset.engine = t.engine || '';
     f.setAttribute('allow', 'autoplay; fullscreen; clipboard-write; gamepad; encrypted-media');
     f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-pointer-lock allow-downloads allow-presentation');
-    f.setAttribute('allowfullscreen', ''); f.src = src; t.el.appendChild(f); t.frame = f;
+    f.setAttribute('allowfullscreen', ''); f.src = src; wrap.appendChild(f); t.frame = f;
+    applyZoom(t);
     const failTimer = !direct && setTimeout(() => {
       if (!t.frame) return;
       let plain = '';
       try { plain = f.contentDocument?.body?.innerText?.trim() || ''; } catch (e) {}
-      if (/^There was an error loading|^The model is busy/i.test(plain) || (plain.length < 80 && /error/i.test(plain))) {
-        const other = (t.engine || WebProxy.engineFor()) === 'scramjet' ? 'hitboy' : 'scramjet';
-        t.el.innerHTML = `<div class="notice"><h3>Page did not load</h3><p class="muted">The proxy could not fetch this site yet. Try again or switch engines.</p>
-          <p class="small muted">${esc(plain.slice(0, 160))}</p>
-          <div class="row"><button class="primary" data-act="retry">Try again</button><button data-act="other">Open with ${engineName(other)}</button><button data-act="direct">Load without proxy</button></div></div>`;
-        t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor());
-        t.el.querySelector('[data-act=other]').onclick = () => { OS.set({ engine: other }); navigate(t, url, true, other); };
-        t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url, true, 'direct'); };
-      }
+      if (/^There was an error loading|^The model is busy/i.test(plain) || (plain.length < 80 && /error/i.test(plain))) showFailNotice(t, url, plain);
     }, 22000);
     f.onload = () => {
       clearTimeout(failTimer);
+      t.loading = false;
       loading(false);
       try { // same-origin when proxied: read the real URL and title
         const real = WebProxy.decode(f.contentWindow.location.pathname + f.contentWindow.location.search + f.contentWindow.location.hash);
@@ -351,22 +396,16 @@ function BrowserApp(body, win, opts = {}) {
         const plain = (f.contentDocument.body?.innerText || '').trim();
         if (/^There was an error loading this page\./.test(plain)) throw new Error('load');
         t.title = f.contentDocument.title || hostOf(t.url);
+        renderOmniSite();
         const clicked = youtubeId(t.url);
         if (clicked && !t.pageWanted) return openYouTube(t, t.url, clicked);
         // links that try to open new windows open as new tabs instead
         f.contentWindow.open = (href) => { if (href) newTab(new URL(href, t.url).href); return null; };
       } catch (e) {
-        if (!direct && t.frame) {
-          const other = (t.engine || WebProxy.engineFor()) === 'scramjet' ? 'hitboy' : 'scramjet';
-          t.el.innerHTML = `<div class="notice"><h3>Page did not load</h3><p class="muted">The proxy could not fetch this site.</p>
-            <div class="row"><button class="primary" data-act="retry">Try again</button><button data-act="other">Open with ${engineName(other)}</button><button data-act="direct">Load without proxy</button></div></div>`;
-          t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor());
-          t.el.querySelector('[data-act=other]').onclick = () => { OS.set({ engine: other }); navigate(t, url, true, other); };
-          t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url, true, 'direct'); };
-          return;
-        }
+        t.loading = false;
+        if (!direct) { showFailNotice(t, url, ''); return; }
       }
-      if (t === cur) { u.value = t.url; renderBookmarks(); renderPx(); } renderTabs();
+      if (t === cur) { u.value = t.url; renderBookmarks(); renderPx(); renderOmniSite(); } renderTabs();
       if (!t.private) addHistory(t.url, t.title);
     };
   };
@@ -383,6 +422,19 @@ function BrowserApp(body, win, opts = {}) {
   $b('.newtab').onclick = () => newTab();
   $b('.tablist').onclick = e => { const x = e.target.closest('[data-x]'); if (x) return closeTab(tabs[x.dataset.x]); const el = e.target.closest('.tab'); if (el) select(tabs[el.dataset.i]); };
   $b('.tablist').onauxclick = e => { const el = e.target.closest('.tab'); if (el && e.button === 1) closeTab(tabs[el.dataset.i]); };
+  $b('.tablist').oncontextmenu = e => {
+    const el = e.target.closest('.tab');
+    if (!el) return;
+    e.preventDefault();
+    const t = tabs[el.dataset.i];
+    if (!t) return;
+    const r = el.getBoundingClientRect();
+    OS.menu($('#ctx-menu'), [
+      ['plus', 'New tab', () => newTab()],
+      ...(t.url ? [['reload', 'Reload', () => navigate(t, t.url, true)], ['file', 'Duplicate tab', () => newTab(t.url, t.private)]] : []),
+      '-', ['close', 'Close tab', () => closeTab(t)],
+    ], r.left, r.bottom + 2);
+  };
   $b('.bm').onclick = () => {
     if (!cur.url) return; let bms = OS.cfg.bookmarks || [];
     bms = bms.some(b => b.url === cur.url) ? bms.filter(b => b.url !== cur.url) : [...bms, { url: cur.url, title: cur.title || cur.url }];
@@ -407,6 +459,25 @@ function BrowserApp(body, win, opts = {}) {
     if (proxyOn()) { try { await WebProxy.ready(); url = location.origin + WebProxy.encode(cur.url); } catch (e) {} }
     OS.openBlank(url);
   };
+  $b('.zm-in').onclick = () => bumpZoom(1);
+  $b('.zm-out').onclick = () => bumpZoom(-1);
+  $b('.hist').onclick = e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const items = (OS.cfg.history || []).slice(0, 14);
+    if (!items.length) return OS.toast('No history yet.');
+    OS.menu($('#ctx-menu'), items.map(h => ['web', (h.title || hostOf(h.url)).slice(0, 36), () => navigate(cur, h.url)]), r.left - 40, r.bottom + 4);
+  };
+  body.tabIndex = -1;
+  body.addEventListener('keydown', e => {
+    if (WM.focused() !== win) return;
+    if (e.ctrlKey && e.key.toLowerCase() === 'l') { e.preventDefault(); u.focus(); u.select(); }
+    else if (e.ctrlKey && e.key.toLowerCase() === 't' && !opts.single) { e.preventDefault(); newTab(); }
+    else if (e.ctrlKey && e.key.toLowerCase() === 'w' && !opts.single && tabs.length > 1) { e.preventDefault(); closeTab(cur); }
+    else if (e.ctrlKey && e.key.toLowerCase() === 'r') { e.preventDefault(); cur?.url ? navigate(cur, cur.url, true) : home(cur); }
+    else if (e.ctrlKey && (e.key === '=' || e.key === '+')) { e.preventDefault(); bumpZoom(1); }
+    else if (e.ctrlKey && e.key === '-') { e.preventDefault(); bumpZoom(-1); }
+  });
+  win.el.addEventListener('mousedown', () => body.focus({ preventScroll: true }));
   renderPx(); newTab(opts.url);
 }
 
