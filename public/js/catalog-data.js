@@ -278,6 +278,8 @@ STORE.push(
   {"id": "speedruncom", "name": "Speedrun.com", "fav": 1, "desc": "Speedruns", "url": "https://www.speedrun.com/", "cat": "Games"},
 );
 WEB_CATALOG.push(
+  ["Webports", "Retrora (Season 1)", "https://retrora.lol/play"],
+  ["Webports", "Retrora Portal", "https://retrora.org/portal/"],
   ["Multiplayer", "Survev.io", "https://survev.io/"],
   ["Multiplayer", "Gats.io", "https://gats.io/"],
   ["Multiplayer", "Florr.io", "https://florr.io/"],

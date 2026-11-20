@@ -11,7 +11,17 @@ const WebProxy = {
   // Older builds stored a per-site Ultraviolet fallback here. HitBoy no longer uses that.
   siteEngines() { try { return JSON.parse(localStorage.getItem('novaos.pxSites')) || {}; } catch (e) { return {}; } },
   setSiteEngine() {},
-  engineFor() { return this.engine() === 'scramjet' ? 'scramjet' : 'hitboy'; },
+  engineFor(url) {
+    if (this.engine() === 'scramjet') return 'scramjet';
+    if (url) {
+      try {
+        const h = new URL(url).hostname.replace(/^www\./, '').replace(/^m\./, '');
+        if (/(^|\.)youtube\.com$/.test(h) || h === 'youtu.be' || h === 'music.youtube.com') return 'scramjet';
+        if (/retrora\.(lol|org)$/.test(h)) return 'scramjet';
+      } catch (e) {}
+    }
+    return 'hitboy';
+  },
   transport() { return this.TRANSPORTS[OS.cfg.transport] ? OS.cfg.transport : 'hitboy'; },
   supported() { return location.protocol !== 'file:' && 'serviceWorker' in navigator && self.BareMux && self.HitBoyProxy && self.$scramjetLoadController; },
   _auto: null,
@@ -177,12 +187,12 @@ function BrowserApp(body, win, opts = {}) {
     applyZoom(cur);
   };
   const showFailNotice = (t, url, plain) => {
-    const other = (t.engine || WebProxy.engineFor()) === 'scramjet' ? 'hitboy' : 'scramjet';
+    const other = (t.engine || WebProxy.engineFor(url)) === 'scramjet' ? 'hitboy' : 'scramjet';
     t.frame = null;
     t.el.innerHTML = `<div class="notice"><h3>Page did not load</h3><p class="muted">The proxy could not fetch this site. Try again, switch engines, or load without the proxy.</p>
       ${plain ? `<p class="small muted">${esc(String(plain).slice(0, 200))}</p>` : ''}
       <div class="row"><button class="primary" data-act="retry">Try again</button><button data-act="other">Open with ${engineName(other)}</button><button data-act="direct">Load without proxy</button></div></div>`;
-    t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor());
+    t.el.querySelector('[data-act=retry]').onclick = () => navigate(t, url, true, t.engine || WebProxy.engineFor(url));
     t.el.querySelector('[data-act=other]').onclick = () => { OS.set({ engine: other }); navigate(t, url, true, other); };
     t.el.querySelector('[data-act=direct]').onclick = () => { OS.set({ proxy: false }); renderPx(); navigate(t, url, true, 'direct'); };
   };
@@ -323,16 +333,9 @@ function BrowserApp(body, win, opts = {}) {
     t.ytCtl?.abort();
     const ctl = new AbortController(); t.ytCtl = ctl;
     if (!proxyOn()) return playYouTube(t, url, id, '');
-    // The watch page from this server usually embeds "Sign in to confirm you're not a bot".
-    // Reading that response avoids running YouTube's scripts when the player cannot start.
-    try {
-      await WebProxy.ready();
-      const probe = await fetch(WebProxy.encode(url, WebProxy.engineFor()));
-      const html = await probe.text();
-      if (/confirm you.?re not a bot|sign in to confirm|unusual traffic/i.test(html)) {
-        return playYouTube(t, url, id, 'YouTube asked this server to sign in, so the video is playing here.');
-      }
-    } catch (e) {}
+    if (!t.pageWanted) {
+      return playYouTube(t, url, id, 'Plays as a video file so the bot check does not interrupt playback. Use Open the YouTube page for the full site.');
+    }
     await navigate(t, url, false, 'ytpage');
     if (ctl.signal.aborted) return;
     if (await youtubeBlocked(t, ctl)) {
@@ -357,7 +360,7 @@ function BrowserApp(body, win, opts = {}) {
       t.el.innerHTML = '';
       try {
         await WebProxy.ready();
-        t.engine = force === 'scramjet' || force === 'hitboy' ? force : WebProxy.engineFor();
+        t.engine = force === 'scramjet' || force === 'hitboy' ? force : WebProxy.engineFor(url);
         src = WebProxy.encode(url, t.engine);
       }
       catch (e) {

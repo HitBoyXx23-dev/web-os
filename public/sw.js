@@ -12,7 +12,7 @@ const { ScramjetServiceWorker } = $scramjetLoadWorker();
 const scramjet = new ScramjetServiceWorker();
 const uv = new UVServiceWorker();
 
-const CACHE = 'novaos-v29';
+const CACHE = 'novaos-v30';
 const BASE = new URL('./', self.location).pathname;
 // Small core needed to boot offline, including the HitBoy rewriter; everything else is cached the first time it's used.
 const SHELL = ['', 'index.html', 'css/os.css', 'css/shells.css', 'manifest.webmanifest',
@@ -144,8 +144,9 @@ self.addEventListener('fetch', event => {
       if (adblock && event.request.destination !== 'document') {
         const target = proxiedTarget(url);
         let referrer = null; try { referrer = proxiedTarget(new URL(event.request.referrer)); } catch (e) {}
-        const videoSite = referrer && /(^|\.)(youtube\.com|youtu\.be|googlevideo\.com|ytimg\.com|twitch\.tv|spotify\.com)$/.test(referrer.hostname);
-        if (target && blockedHost(target.hostname) && !videoSite) return new Response(null, { status: 204 });
+        const mediaHost = h => /(^|\.)(youtube\.com|youtu\.be|googlevideo\.com|ytimg\.com|ggpht\.com|gstatic\.com|twitch\.tv|spotify\.com|retrora\.lol|retrora\.org)$/.test(h);
+        const videoSite = referrer && mediaHost(referrer.hostname);
+        if (target && blockedHost(target.hostname) && !mediaHost(target.hostname) && !videoSite) return new Response(null, { status: 204 });
       }
       if (url.pathname.startsWith(BASE + 'hb/')) {
         try { return shield(event, await hitboyFetch(event)); }
