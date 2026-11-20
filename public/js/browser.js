@@ -18,6 +18,8 @@ const WebProxy = {
         const h = new URL(url).hostname.replace(/^www\./, '').replace(/^m\./, '');
         if (/(^|\.)youtube\.com$/.test(h) || h === 'youtu.be' || h === 'music.youtube.com') return 'scramjet';
         if (/retrora\.(lol|org)$/.test(h)) return 'scramjet';
+        if (h.endsWith('quenq.com') || /^(vel\.gg|nfscrb\.xyz|nfsu2\.xyz|outbreakweb\.com|eaglercraft\.com)$/.test(h)) return 'scramjet';
+        if (/\.(github\.io|pages\.dev)$/.test(h)) return 'scramjet';
       } catch (e) {}
     }
     return 'hitboy';
